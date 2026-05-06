@@ -1,0 +1,22 @@
+# Rojo build artifacts
+*.rbxl
+*.rbxlx
+*.rbxl.lock
+*.rbxlx.lock
+*.rbxm
+*.rbxmx
+
+# Wally / package manager
+Packages/
+ServerPackages/
+DevPackages/
+sourcemap.json
+
+# Editor
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Logs
+*.log
