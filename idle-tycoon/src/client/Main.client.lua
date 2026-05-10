@@ -1,6 +1,7 @@
 --!strict
 -- Client controller. Builds the UI, requests initial state, listens for
--- server snapshots, and locally interpolates progress bars between updates.
+-- server snapshots, locally extrapolates progress, and drives polish effects
+-- (sounds, floating text, milestone banners).
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -11,7 +12,10 @@ local Format = require(Shared.Format)
 local Economy = require(Shared.Economy)
 local Remotes = require(Shared.Remotes)
 
+local Theme = require(script.Parent:WaitForChild("Theme"))
 local UI = require(script.Parent:WaitForChild("UI"))
+local Sounds = require(script.Parent:WaitForChild("Sounds"))
+local Effects = require(script.Parent:WaitForChild("Effects"))
 
 local buyEvent = Remotes.event("BuyBusiness")
 local hireEvent = Remotes.event("HireManager")
@@ -23,8 +27,24 @@ local getState = Remotes.func("GetState")
 
 local handles = UI.build()
 
--- Local mirror of server state. Money and progress are interpolated locally
--- between snapshots to keep the UI smooth at high FPS.
+-- Bind tactile feedback on every button at construction time.
+Effects.bindPressFeel(handles.qtyButton)
+Effects.bindPressFeel(handles.offlineCloseButton)
+for _, h in pairs(handles.businesses) do
+	Effects.bindPressFeel(h.buyButton)
+	Effects.bindPressFeel(h.managerButton)
+	Effects.bindPressFeel(h.tapButton)
+end
+
+-- Affordance pulses (turned on/off in the render loop).
+local buyPulses: { [string]: any } = {}
+local managerPulses: { [string]: any } = {}
+for id, h in pairs(handles.businesses) do
+	buyPulses[id] = Effects.affordancePulse(h.buyButton)
+	managerPulses[id] = Effects.affordancePulse(h.managerButton)
+end
+
+-- Local mirror of server state.
 type ClientBusiness = { owned: number, hasManager: boolean, progress: number }
 type ClientState = {
 	money: number,
@@ -40,7 +60,18 @@ local state: ClientState = {
 	lastUpdate = os.clock(),
 }
 
--- Buy quantity selector cycles through Config.BUY_QUANTITIES.
+-- Detection state -----------------------------------------------------------
+-- Tracking previous-frame values lets us emit one-shot effects on edges
+-- (cycle wrap, milestone cross, money increase) without flooding.
+
+local prevProgress: { [string]: number } = {}
+local prevOwned: { [string]: number } = {}
+local prevHadManager: { [string]: boolean } = {}
+local prevMoney = 0
+-- Suppress effects on the very first snapshot so a returning player doesn't
+-- see a flood of milestone banners on join.
+local snapshotsApplied = 0
+
 local qtyIndex = 1
 local function currentQty(): any
 	return Config.BUY_QUANTITIES[qtyIndex]
@@ -54,22 +85,43 @@ end
 handles.qtyButton.MouseButton1Click:Connect(function()
 	qtyIndex = (qtyIndex % #Config.BUY_QUANTITIES) + 1
 	handles.qtyButton.Text = "BUY " .. formatQty(currentQty())
+	Sounds.play("uiClick")
 end)
 
 -- Wire per-business buttons.
 for id, h in pairs(handles.businesses) do
 	h.buyButton.MouseButton1Click:Connect(function()
 		buyEvent:FireServer(id, currentQty())
+		Sounds.play("uiClick")
 	end)
 	h.managerButton.MouseButton1Click:Connect(function()
 		hireEvent:FireServer(id)
+		Sounds.play("uiClick")
 	end)
 	h.tapButton.MouseButton1Click:Connect(function()
 		manualEvent:FireServer(id)
+		Sounds.play("tap")
+		-- Optimistic local cycle start so the bar moves immediately,
+		-- without waiting for the next 5Hz server snapshot.
+		local b = state.businesses[id]
+		if b and b.owned > 0 and not b.hasManager and b.progress <= 0 then
+			b.progress = 0.001
+		end
+		Effects.punchScale(h.tapButton, 0.08)
 	end)
 end
 
--- Apply a state snapshot from the server.
+-- Snapshot application ------------------------------------------------------
+
+local function whichMilestoneCrossed(prev: number, current: number): number?
+	for _, ms in ipairs(Config.MILESTONES) do
+		if prev < ms.level and current >= ms.level then
+			return ms.level
+		end
+	end
+	return nil
+end
+
 local function applySnapshot(snap)
 	if not snap then return end
 	state.money = snap.money or state.money
@@ -82,6 +134,7 @@ local function applySnapshot(snap)
 			progress = b.progress or 0,
 		}
 	end
+	snapshotsApplied += 1
 end
 
 stateUpdate.OnClientEvent:Connect(applySnapshot)
@@ -89,6 +142,9 @@ stateUpdate.OnClientEvent:Connect(applySnapshot)
 notify.OnClientEvent:Connect(function(payload)
 	if type(payload) == "table" and payload.message then
 		UI.flashNotify(handles, payload.kind or "info", payload.message)
+		if payload.kind == "error" then
+			Sounds.play("purchaseFail")
+		end
 	end
 end)
 
@@ -98,14 +154,15 @@ offlineEvent.OnClientEvent:Connect(function(payload)
 	handles.offlineDurationLabel.Text =
 		"You were away for " .. Format.duration(payload.seconds) .. "."
 	handles.offlinePopup.Visible = true
+	Sounds.play("milestone")
 end)
 
 handles.offlineCloseButton.MouseButton1Click:Connect(function()
 	handles.offlinePopup.Visible = false
+	Sounds.play("uiClick")
 end)
 
--- Pull the initial snapshot. The server may also push it via StateUpdate
--- on first join, but invoking here covers reconnects and respawns.
+-- Pull initial snapshot.
 task.spawn(function()
 	local ok, snap = pcall(function()
 		return getState:InvokeServer()
@@ -115,34 +172,106 @@ task.spawn(function()
 	end
 end)
 
--- Render loop ---------------------------------------------------------------
--- We extrapolate progress between server snapshots: managed businesses
--- advance freely; manual ones only move once started by ManualCollect.
+-- Local extrapolation + edge detection -------------------------------------
 
 local function advanceLocal(dt: number)
 	for id, b in pairs(state.businesses) do
 		if b.owned > 0 then
-			if b.hasManager then
-				b.progress += dt
-				local def = Config.BUSINESS_BY_ID[id]
-				if def then
-					-- Wrap visually so we don't hold at 100% awaiting the server.
+			local def = Config.BUSINESS_BY_ID[id]
+			if def then
+				if b.hasManager then
+					b.progress += dt
 					while b.progress >= def.cycleTime do
 						b.progress -= def.cycleTime
-						-- Optimistically credit money so the wallet ticks smoothly;
-						-- the next server snapshot is the source of truth.
+						-- Optimistic credit; server snapshot is source of truth.
 						state.money += Economy.cyclePayout(def, b.owned, 1)
 					end
-				end
-			elseif b.progress > 0 then
-				local def = Config.BUSINESS_BY_ID[id]
-				if def then
+				elseif b.progress > 0 then
 					b.progress = math.min(def.cycleTime, b.progress + dt)
+					if b.progress >= def.cycleTime then
+						-- Manual cycle just completed locally.
+						state.money += Economy.cyclePayout(def, b.owned, 1)
+						b.progress = 0
+					end
 				end
 			end
 		end
 	end
 end
+
+local function emitEdgeEffects()
+	-- Cycle-completion floating text + sound (only once per business per frame
+	-- group, to avoid spamming when many cycles wrap at once with managers).
+	for id, b in pairs(state.businesses) do
+		local h = handles.businesses[id]
+		if not h then continue end
+		local def = h.def
+		local prev = prevProgress[id] or 0
+		local owned = b.owned
+
+		-- A "wrap" is when progress went backward (managed: cycleTime → 0,
+		-- manual: high → 0). Owned must be > 0 to count.
+		if owned > 0 and prev > b.progress and prev > def.cycleTime * 0.5 then
+			local payout = Economy.cyclePayout(def, owned, 1)
+			Effects.floatingText(h.frame, "+" .. Format.money(payout))
+			Effects.flashBackground(h.progressFill, Theme.colors.goldBright, Theme.colors.accent)
+			Sounds.play("cycle")
+		end
+
+		-- Owned increment (purchase landed): pulse the icon.
+		local prevO = prevOwned[id] or 0
+		if owned > prevO then
+			Effects.punchScale(h.icon, 0.15)
+			if snapshotsApplied > 1 then
+				Sounds.play("purchase")
+			end
+
+			-- Milestone celebration.
+			local crossed = whichMilestoneCrossed(prevO, owned)
+			if crossed and snapshotsApplied > 1 then
+				local mult = 1
+				for _, ms in ipairs(Config.MILESTONES) do
+					if ms.level == crossed then mult = ms.multiplier; break end
+				end
+				Effects.celebrationBanner(
+					handles.screenGui,
+					string.format("%s × %d!", def.name, crossed),
+					string.format("Revenue ×%d", mult)
+				)
+				Sounds.play("milestone")
+			end
+		end
+
+		-- Manager just hired: fanfare + persistent visual change handled in refreshUI.
+		if b.hasManager and not (prevHadManager[id] or false) then
+			if snapshotsApplied > 1 then
+				Sounds.play("manager")
+				Effects.celebrationBanner(
+					handles.screenGui,
+					def.managerName .. " hired!",
+					def.name .. " runs itself now"
+				)
+			end
+		end
+
+		prevProgress[id] = b.progress
+		prevOwned[id] = owned
+		prevHadManager[id] = b.hasManager
+	end
+
+	-- Money-increase flash on the HUD label.
+	if state.money > prevMoney + 0.5 then
+		Effects.flashColor(handles.moneyLabel, Theme.colors.goldBright, Theme.colors.gold)
+		-- Punch scale only on big jumps (purchases reduce, cycles bump).
+		local delta = state.money - prevMoney
+		if delta > prevMoney * 0.05 and prevMoney > 0 then
+			Effects.punchScale(handles.moneyLabel, 0.08)
+		end
+	end
+	prevMoney = state.money
+end
+
+-- Render loop ---------------------------------------------------------------
 
 local function totalRevenuePerSecond(): number
 	local total = 0
@@ -169,6 +298,16 @@ local function refreshUI()
 
 		h.ownedLabel.Text = "x" .. tostring(b.owned)
 
+		-- Locked overlay until first unit purchased.
+		local locked = b.owned <= 0
+		if locked then
+			h.lockOverlay.Visible = true
+			local unlockCost = Economy.unitCost(def, 0)
+			h.lockLabel.Text = string.format("🔒  Unlock for %s", Format.money(unlockCost))
+		else
+			h.lockOverlay.Visible = false
+		end
+
 		-- Progress fill.
 		local frac = if def.cycleTime > 0 then math.clamp(b.progress / def.cycleTime, 0, 1) else 0
 		if b.owned > 0 and (b.hasManager or b.progress > 0) then
@@ -192,7 +331,7 @@ local function refreshUI()
 				Format.duration(def.cycleTime)
 			)
 		else
-			h.revenueLabel.Text = "Buy your first to start earning"
+			h.revenueLabel.Text = "Tap a business above to earn your first dollars"
 		end
 
 		-- Buy button cost.
@@ -203,18 +342,21 @@ local function refreshUI()
 			n = tonumber(qty) or 1
 		end
 		local cost = Economy.bulkCost(def, b.owned, n)
-		h.buyQtyLabel.Text = "BUY " .. formatQty(qty == "MAX" and ("x" .. n) or qty)
+		h.buyQtyLabel.Text = "BUY " .. (qty == "MAX" and ("x" .. n) or formatQty(qty))
 		h.buyCostLabel.Text = Format.money(cost)
-		h.buyButton.Active = state.money >= cost
-		h.buyButton.AutoButtonColor = state.money >= cost
-		h.buyButton.BackgroundTransparency = state.money >= cost and 0 or 0.4
+		local canBuy = state.money >= cost
+		h.buyButton.AutoButtonColor = false
+		h.buyButton.BackgroundTransparency = canBuy and 0 or 0.5
+		h.buyButton.BackgroundColor3 = canBuy and Theme.colors.accent or Theme.colors.dim
+		buyPulses[id].enabled = canBuy and not locked
 
 		-- Manager button.
 		if b.hasManager then
-			h.managerStatus.Text = def.managerName .. " ✓"
-			h.managerButton.Active = false
-			h.managerButton.AutoButtonColor = false
-			h.managerButton.BackgroundTransparency = 0.5
+			h.managerStatus.Text = "✓ " .. def.managerName
+			h.managerStatus.TextColor3 = Theme.colors.accentBright
+			h.managerButton.BackgroundColor3 = Theme.colors.accentDim
+			h.managerButton.BackgroundTransparency = 0.4
+			managerPulses[id].enabled = false
 		else
 			h.managerStatus.Text = string.format(
 				"Hire %s — %s",
@@ -222,9 +364,10 @@ local function refreshUI()
 				Format.money(def.managerCost)
 			)
 			local canHire = state.money >= def.managerCost and b.owned > 0
-			h.managerButton.Active = canHire
-			h.managerButton.AutoButtonColor = canHire
-			h.managerButton.BackgroundTransparency = canHire and 0 or 0.4
+			h.managerStatus.TextColor3 = canHire and Theme.colors.text or Theme.colors.muted
+			h.managerButton.BackgroundColor3 = canHire and Theme.colors.manager or Theme.colors.panelAlt
+			h.managerButton.BackgroundTransparency = canHire and 0 or 0.3
+			managerPulses[id].enabled = canHire
 		end
 	end
 end
@@ -235,5 +378,6 @@ RunService.RenderStepped:Connect(function()
 	local dt = now - lastFrame
 	lastFrame = now
 	advanceLocal(dt)
+	emitEdgeEffects()
 	refreshUI()
 end)
