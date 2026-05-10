@@ -215,6 +215,7 @@ local function emitEdgeEffects()
 			local payout = Economy.cyclePayout(def, owned, 1)
 			Effects.floatingText(h.frame, "+" .. Format.money(payout))
 			Effects.flashBackground(h.progressFill, Theme.colors.goldBright, Theme.colors.accent)
+			Effects.burstParticles(handles.screenGui, h.icon, 10)
 			Sounds.play("cycle")
 		end
 

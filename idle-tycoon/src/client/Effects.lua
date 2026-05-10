@@ -11,6 +11,60 @@ local Effects = {}
 local QUAD_OUT = TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 local FLASH_INFO = TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
+-- Coin-like particle burst from a source GuiObject. Particles are parented
+-- to `layer` (typically the ScreenGui) and positioned in absolute pixel
+-- coordinates so they can fly outside the source's clipping bounds.
+function Effects.burstParticles(layer: Instance, source: GuiObject, count: number?, tint: Color3?)
+	local n = count or 10
+	local color = tint or Theme.colors.goldBright
+	local strokeColor = Theme.colors.gold
+
+	local absPos = source.AbsolutePosition
+	local absSize = source.AbsoluteSize
+	local cx = absPos.X + absSize.X * 0.5
+	local cy = absPos.Y + absSize.Y * 0.5
+
+	for i = 1, n do
+		local p = Instance.new("Frame")
+		p.AnchorPoint = Vector2.new(0.5, 0.5)
+		p.Position = UDim2.fromOffset(cx, cy)
+		p.Size = UDim2.fromOffset(12, 12)
+		p.BackgroundColor3 = color
+		p.BorderSizePixel = 0
+		p.ZIndex = 30
+		p.Parent = layer
+		Theme.corner(p, 6)
+
+		local stroke = Instance.new("UIStroke")
+		stroke.Color = strokeColor
+		stroke.Thickness = 1.5
+		stroke.Parent = p
+
+		-- Even angular spread + jitter so 10 particles cover the circle.
+		local angle = ((i - 1) / n) * math.pi * 2 + (math.random() - 0.5) * 0.5
+		local distance = 60 + math.random() * 50
+		local tx = cx + math.cos(angle) * distance
+		-- Slight upward bias so it feels gravity-defying like collected coins.
+		local ty = cy + math.sin(angle) * distance - 25
+
+		TweenService:Create(p, TweenInfo.new(
+			0.55, Enum.EasingStyle.Quad, Enum.EasingDirection.Out
+		), {
+			Position = UDim2.fromOffset(tx, ty),
+			BackgroundTransparency = 1,
+			Size = UDim2.fromOffset(4, 4),
+		}):Play()
+
+		TweenService:Create(stroke, TweenInfo.new(0.55), {
+			Transparency = 1,
+		}):Play()
+
+		task.delay(0.6, function()
+			p:Destroy()
+		end)
+	end
+end
+
 -- Floating "+$X" text that rises from a target and fades.
 function Effects.floatingText(parent: GuiObject, text: string, color: Color3?)
 	local label = Instance.new("TextLabel")
