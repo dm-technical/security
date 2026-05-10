@@ -1,23 +1,24 @@
 --!strict
--- Centralized colors, fonts, and tiny UI helpers. Imported by UI/Effects.
--- Vibrant idle-game palette: bright greens, gold money, red CTAs.
+-- Centralized colors, fonts, and tiny UI helpers.
+-- Deep-navy idle-game palette matched to the v2 mockup: dark backgrounds,
+-- bright green money, themed business cards, accent gems.
 
 local Theme = {}
 
 Theme.colors = {
-	-- Background gradient stops (top to bottom) — the bright Vegas-lawn green.
-	bgTop = Color3.fromRGB(74, 222, 128),
-	bgBottom = Color3.fromRGB(20, 130, 70),
-	bgPattern = Color3.fromRGB(35, 165, 95),
+	-- Background gradient (deep navy → near-black at bottom).
+	bgTop = Color3.fromRGB(26, 27, 58),
+	bgBottom = Color3.fromRGB(15, 20, 40),
 
-	-- Cards and panels: dark slate so business icons + bright text pop.
-	panel = Color3.fromRGB(28, 38, 56),
-	panelAlt = Color3.fromRGB(45, 58, 82),
-	panelHi = Color3.fromRGB(72, 88, 118),
-	panelLight = Color3.fromRGB(255, 255, 255),
-	panelLightAlt = Color3.fromRGB(241, 245, 249),
+	-- Panels (cards, sidebar containers).
+	panel = Color3.fromRGB(30, 37, 64),
+	panelAlt = Color3.fromRGB(40, 48, 80),
+	panelHi = Color3.fromRGB(58, 68, 110),
+	panelBorder = Color3.fromRGB(45, 52, 84),
 
-	-- Money / wealth.
+	-- Money / wealth: lime green like the mockup ($38.0K text).
+	money = Color3.fromRGB(132, 230, 144),
+	moneyDim = Color3.fromRGB(74, 222, 128),
 	gold = Color3.fromRGB(250, 204, 21),
 	goldBright = Color3.fromRGB(254, 240, 138),
 	goldDeep = Color3.fromRGB(202, 138, 4),
@@ -25,24 +26,45 @@ Theme.colors = {
 	-- Action buttons.
 	buyAction = Color3.fromRGB(34, 197, 94),
 	buyBright = Color3.fromRGB(74, 222, 128),
-	buyDim = Color3.fromRGB(22, 101, 52),
-	cta = Color3.fromRGB(239, 68, 68),       -- red CTA (settings, special actions)
+	buyDim = Color3.fromRGB(60, 80, 100),
+	cta = Color3.fromRGB(239, 68, 68),
 	ctaBright = Color3.fromRGB(248, 113, 113),
 	manager = Color3.fromRGB(99, 102, 241),
 	managerBright = Color3.fromRGB(129, 140, 248),
 
+	-- Currency: gem purple.
+	gem = Color3.fromRGB(168, 85, 247),
+	gemBright = Color3.fromRGB(216, 180, 254),
+	gemDeep = Color3.fromRGB(126, 34, 206),
+
+	-- Text scale.
 	text = Color3.fromRGB(241, 245, 249),
 	textDark = Color3.fromRGB(15, 23, 41),
 	muted = Color3.fromRGB(148, 163, 184),
 	dim = Color3.fromRGB(100, 116, 139),
 	danger = Color3.fromRGB(239, 68, 68),
 
-	-- Background-compatible legacy aliases used elsewhere.
-	background = Color3.fromRGB(20, 130, 70),
-	backgroundDeep = Color3.fromRGB(8, 60, 30),
+	-- Compatibility aliases (legacy callers).
+	background = Color3.fromRGB(15, 20, 40),
+	backgroundDeep = Color3.fromRGB(8, 12, 26),
 	accent = Color3.fromRGB(34, 197, 94),
 	accentBright = Color3.fromRGB(74, 222, 128),
 	accentDim = Color3.fromRGB(22, 101, 52),
+}
+
+-- Themed colors per business id. Used by the icon card background and the
+-- progress bar fill. Keys mirror Config.BUSINESSES.id.
+Theme.businessThemes = {
+	lemonade  = { base = Color3.fromRGB(34, 197, 94),  bright = Color3.fromRGB(74, 222, 128) },
+	newspaper = { base = Color3.fromRGB(59, 130, 246), bright = Color3.fromRGB(96, 165, 250) },
+	carwash   = { base = Color3.fromRGB(239, 68, 68),  bright = Color3.fromRGB(248, 113, 113) },
+	pizza     = { base = Color3.fromRGB(249, 115, 22), bright = Color3.fromRGB(251, 146, 60) },
+	donut     = { base = Color3.fromRGB(168, 85, 247), bright = Color3.fromRGB(192, 132, 252) },
+	shrimp    = { base = Color3.fromRGB(236, 72, 153), bright = Color3.fromRGB(244, 114, 182) },
+	hockey    = { base = Color3.fromRGB(6, 182, 212),  bright = Color3.fromRGB(34, 211, 238) },
+	movie     = { base = Color3.fromRGB(234, 179, 8),  bright = Color3.fromRGB(250, 204, 21) },
+	bank      = { base = Color3.fromRGB(20, 184, 166), bright = Color3.fromRGB(45, 212, 191) },
+	oil       = { base = Color3.fromRGB(100, 116, 139),bright = Color3.fromRGB(148, 163, 184) },
 }
 
 Theme.font = {
@@ -81,7 +103,6 @@ function Theme.stroke(parent: Instance, color: Color3, thickness: number, transp
 	return s
 end
 
--- Cheap drop-shadow effect: an offset frame behind the target.
 function Theme.dropShadow(target: GuiObject, opacity: number?): Frame
 	local shadow = Instance.new("Frame")
 	shadow.Name = "Shadow"
@@ -106,6 +127,14 @@ function Theme.verticalGradient(parent: Instance, top: Color3, bottom: Color3, r
 	g.Rotation = rotation or 90
 	g.Parent = parent
 	return g
+end
+
+-- Convenience: themed business colors with a fallback when an id has no
+-- explicit entry (e.g., a future business added before the theme is set).
+function Theme.businessTheme(id: string): { base: Color3, bright: Color3 }
+	local t = Theme.businessThemes[id]
+	if t then return t end
+	return { base = Theme.colors.buyAction, bright = Theme.colors.buyBright }
 end
 
 return Theme

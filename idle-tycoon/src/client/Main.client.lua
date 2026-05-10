@@ -29,14 +29,57 @@ local offlineEvent = Remotes.event("OfflineEarnings")
 local notify = Remotes.event("Notify")
 local getState = Remotes.func("GetState")
 
+local Players = game:GetService("Players")
+
 local handles = UI.build()
 local settingsPanel = Settings.build(handles.screenGui)
+
+-- Pre-populate the player card with the local player's display name.
+handles.playerNameLabel.Text = Players.LocalPlayer.DisplayName
 
 -- Start ambient coin-rain in the dedicated background layer.
 Background.start(handles.backgroundLayer)
 
 -- Begin music; will silently no-op if no track ID is configured.
 Music.start()
+
+-- "Coming soon" toast for stubbed systems.
+local function comingSoon(label: string)
+	UI.flashNotify(handles, "info", label .. " — coming soon!")
+	Sounds.play("uiClick")
+end
+
+-- Wire stubbed interactions.
+handles.sidebar.onTab = function(id: string, enabled: boolean)
+	Sounds.play("uiClick")
+	if not enabled then
+		comingSoon(id:sub(1, 1):upper() .. id:sub(2))
+	end
+end
+handles.rightPanel.onBoostClick = function(id: string)
+	comingSoon("Boosts")
+end
+handles.rightPanel.onViewAllClick = function()
+	comingSoon("Achievements")
+end
+handles.gemAddButton.MouseButton1Click:Connect(function()
+	comingSoon("Gem shop")
+end)
+
+-- Stub daily-reward countdown. Resets every 24h locally; real implementation
+-- will come with the Phase 2 systems pass.
+task.spawn(function()
+	while handles.sidebar.dailyTimerLabel.Parent do
+		local now = os.time()
+		-- Next midnight UTC.
+		local secsLeft = 24 * 3600 - (now % (24 * 3600))
+		local h = math.floor(secsLeft / 3600)
+		local m = math.floor((secsLeft % 3600) / 60)
+		local s = secsLeft % 60
+		handles.sidebar.dailyTimerLabel.Text = string.format("%02d:%02d:%02d", h, m, s)
+		task.wait(1)
+	end
+end)
 
 -- Settings -> apply locally + persist to server.
 local function applySettings(values: Settings.Values)
@@ -256,8 +299,10 @@ local function emitEdgeEffects()
 		if owned > 0 and prev > b.progress and prev > def.cycleTime * 0.5 then
 			local payout = Economy.cyclePayout(def, owned, 1)
 			Effects.floatingText(h.frame, "+" .. Format.money(payout))
-			Effects.flashBackground(h.progressFill, Theme.colors.goldBright, Theme.colors.accent)
-			Effects.burstParticles(handles.screenGui, h.icon, 10)
+			-- Themed flash on the per-business progress bar.
+			local theme = Theme.businessTheme(id)
+			Effects.flashBackground(h.progressFill, theme.bright, theme.base)
+			Effects.burstParticles(handles.screenGui, h.iconCard, 10, theme.bright)
 			Sounds.play("cycle")
 		end
 
@@ -304,7 +349,7 @@ local function emitEdgeEffects()
 
 	-- Money-increase flash on the HUD label.
 	if state.money > prevMoney + 0.5 then
-		Effects.flashColor(handles.moneyLabel, Color3.fromRGB(255, 255, 240), Theme.colors.goldBright)
+		Effects.flashColor(handles.moneyLabel, Theme.colors.money, Theme.colors.text)
 		-- Punch scale only on big jumps (purchases reduce, cycles bump).
 		local delta = state.money - prevMoney
 		if delta > prevMoney * 0.05 and prevMoney > 0 then
@@ -345,11 +390,14 @@ end
 local function refreshUI()
 	handles.moneyLabel.Text = Format.money(displayedMoney)
 	local rps = totalRevenuePerSecond()
-	handles.rpsLabel.Text = if rps > 0 then Format.money(rps) .. "/sec" else "Tap a business to earn"
+	handles.rpsLabel.Text = if rps > 0
+		then "+" .. Format.money(rps) .. " / sec"
+		else "Tap a business to earn"
 
 	local qty = currentQty()
 	for id, h in pairs(handles.businesses) do
 		local def = h.def
+		local theme = Theme.businessTheme(id)
 		local b = state.businesses[id] or { owned = 0, hasManager = false, progress = 0 }
 
 		h.ownedLabel.Text = "x" .. tostring(b.owned)
@@ -359,12 +407,12 @@ local function refreshUI()
 		if locked then
 			h.lockOverlay.Visible = true
 			local unlockCost = Economy.unitCost(def, 0)
-			h.lockLabel.Text = string.format("🔒  Unlock for %s", Format.money(unlockCost))
+			h.lockLabel.Text = string.format("🔒  Unlocks at %s", Format.money(unlockCost))
 		else
 			h.lockOverlay.Visible = false
 		end
 
-		-- Progress fill.
+		-- Progress fill (themed color stays; flashes handled elsewhere).
 		local frac = if def.cycleTime > 0 then math.clamp(b.progress / def.cycleTime, 0, 1) else 0
 		if b.owned > 0 and (b.hasManager or b.progress > 0) then
 			h.progressFill.Size = UDim2.fromScale(frac, 1)
@@ -372,22 +420,28 @@ local function refreshUI()
 			h.progressFill.Size = UDim2.fromScale(0, 1)
 		end
 
-		-- Cycle-payout label inside the bar.
+		-- Cycle-payout label (now lives to the right of the bar).
 		if b.owned > 0 then
 			h.progressLabel.Text = Format.money(Economy.cyclePayout(def, b.owned, 1))
 		else
-			h.progressLabel.Text = "Locked"
+			h.progressLabel.Text = ""
 		end
 
-		-- Revenue subtext.
+		-- "$X / sec" subtitle matching the mockup.
 		if b.owned > 0 then
-			h.revenueLabel.Text = string.format(
-				"%s/sec  ·  cycle %s",
-				Format.money(Economy.revenuePerSecond(def, b.owned, 1)),
-				Format.duration(def.cycleTime)
-			)
+			h.revenueLabel.Text = Format.money(Economy.revenuePerSecond(def, b.owned, 1)) .. " / sec"
 		else
-			h.revenueLabel.Text = "Tap a business above to earn your first dollars"
+			h.revenueLabel.Text = "Tap to earn your first dollar"
+		end
+
+		-- Bonus badge: shown when at least one milestone is active.
+		local mult = Economy.milestoneMultiplier(b.owned)
+		if mult > 1 then
+			h.bonusBadge.Visible = true
+			h.bonusBadge.BackgroundColor3 = theme.base
+			h.bonusLabel.Text = string.format("x%d BONUS  ▴", mult)
+		else
+			h.bonusBadge.Visible = false
 		end
 
 		-- Buy button cost.
@@ -402,23 +456,18 @@ local function refreshUI()
 		h.buyCostLabel.Text = Format.money(cost)
 		local canBuy = state.money >= cost
 		h.buyButton.AutoButtonColor = false
-		h.buyButton.BackgroundTransparency = canBuy and 0 or 0.5
-		h.buyButton.BackgroundColor3 = canBuy and Theme.colors.accent or Theme.colors.dim
+		h.buyButton.BackgroundColor3 = canBuy and Theme.colors.buyAction or Theme.colors.buyDim
 		buyPulses[id].enabled = canBuy and not locked
 
-		-- Manager button.
+		-- Manager mini-toggle (under the bonus badge).
 		if b.hasManager then
 			h.managerStatus.Text = "✓ " .. def.managerName
-			h.managerStatus.TextColor3 = Theme.colors.accentBright
-			h.managerButton.BackgroundColor3 = Theme.colors.accentDim
-			h.managerButton.BackgroundTransparency = 0.4
+			h.managerStatus.TextColor3 = Theme.colors.text
+			h.managerButton.BackgroundColor3 = Theme.colors.buyAction
+			h.managerButton.BackgroundTransparency = 0.2
 			managerPulses[id].enabled = false
 		else
-			h.managerStatus.Text = string.format(
-				"Hire %s — %s",
-				def.managerName,
-				Format.money(def.managerCost)
-			)
+			h.managerStatus.Text = "Hire Manager  " .. Format.money(def.managerCost)
 			local canHire = state.money >= def.managerCost and b.owned > 0
 			h.managerStatus.TextColor3 = canHire and Theme.colors.text or Theme.colors.muted
 			h.managerButton.BackgroundColor3 = canHire and Theme.colors.manager or Theme.colors.panelAlt

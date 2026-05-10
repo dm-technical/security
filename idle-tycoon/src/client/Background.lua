@@ -10,7 +10,8 @@ local Theme = require(script.Parent.Theme)
 local Background = {}
 
 local SYMBOLS = { "$", "💰", "💵", "🪙" }
-local MAX_ACTIVE = 6
+-- Toned down for the darker navy theme: fewer particles, more transparent.
+local MAX_ACTIVE = 3
 local active = 0
 local running = false
 
@@ -28,17 +29,17 @@ local function spawnOne(layer: GuiObject)
 	label.Size = UDim2.fromOffset(size, size)
 	label.BackgroundTransparency = 1
 	label.Text = SYMBOLS[math.random(1, #SYMBOLS)]
-	label.TextColor3 = Theme.colors.goldBright
+	label.TextColor3 = Theme.colors.gold
 	label.TextStrokeColor3 = Theme.colors.goldDeep
-	label.TextStrokeTransparency = 0.4
-	label.TextTransparency = 0.5
+	label.TextStrokeTransparency = 0.7
+	label.TextTransparency = 0.75
 	label.Font = Theme.font.display
 	label.TextScaled = true
 	label.Rotation = (math.random() - 0.5) * 30
 	label.ZIndex = 1
 	label.Parent = layer
 
-	local duration = 5 + math.random() * 4
+	local duration = 6 + math.random() * 5
 	local drift = (math.random() - 0.5) * 80 -- horizontal sway over the fall
 	local endRotation = label.Rotation + (math.random() - 0.5) * 90
 
@@ -47,7 +48,7 @@ local function spawnOne(layer: GuiObject)
 	), {
 		Position = UDim2.fromOffset(startX + drift, viewport.Y + size),
 		Rotation = endRotation,
-		TextTransparency = 0.85,
+		TextTransparency = 0.95,
 	})
 	tween:Play()
 	tween.Completed:Connect(function()
@@ -63,7 +64,7 @@ function Background.start(layer: GuiObject)
 	task.spawn(function()
 		while running and layer.Parent do
 			spawnOne(layer)
-			task.wait(0.6 + math.random() * 0.8)
+			task.wait(1.4 + math.random() * 1.6)
 		end
 	end)
 end
