@@ -159,8 +159,26 @@ function EconomyService.snapshot(profile)
 		money = profile.money,
 		totalEarned = profile.totalEarned,
 		businesses = biz,
+		settings = {
+			sfxVolume = profile.settings.sfxVolume,
+			musicVolume = profile.settings.musicVolume,
+		},
 		serverTime = os.clock(),
 	}
+end
+
+-- Apply validated settings updates from the client.
+-- Volumes are clamped to [0, 1]; other fields are ignored.
+function EconomyService.updateSettings(profile, payload: any)
+	if type(payload) ~= "table" then return end
+	if payload.sfxVolume ~= nil then
+		local v = tonumber(payload.sfxVolume)
+		if v then profile.settings.sfxVolume = math.clamp(v, 0, 1) end
+	end
+	if payload.musicVolume ~= nil then
+		local v = tonumber(payload.musicVolume)
+		if v then profile.settings.musicVolume = math.clamp(v, 0, 1) end
+	end
 end
 
 return EconomyService

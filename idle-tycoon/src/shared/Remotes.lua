@@ -13,6 +13,7 @@ local REMOTE_EVENTS = {
 	"BuyBusiness",      -- client -> server: { businessId, quantity (number | "MAX") }
 	"HireManager",      -- client -> server: { businessId }
 	"ManualCollect",    -- client -> server: { businessId }
+	"UpdateSettings",   -- client -> server: { sfxVolume?, musicVolume? }
 	"StateUpdate",      -- server -> client: full or partial state snapshot
 	"OfflineEarnings",  -- server -> client: { amount, seconds }
 	"Notify",           -- server -> client: { kind, message }

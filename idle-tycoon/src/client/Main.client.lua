@@ -15,21 +15,44 @@ local Remotes = require(Shared.Remotes)
 local Theme = require(script.Parent:WaitForChild("Theme"))
 local UI = require(script.Parent:WaitForChild("UI"))
 local Sounds = require(script.Parent:WaitForChild("Sounds"))
+local Music = require(script.Parent:WaitForChild("Music"))
 local Effects = require(script.Parent:WaitForChild("Effects"))
+local Settings = require(script.Parent:WaitForChild("Settings"))
+local Background = require(script.Parent:WaitForChild("Background"))
 
 local buyEvent = Remotes.event("BuyBusiness")
 local hireEvent = Remotes.event("HireManager")
 local manualEvent = Remotes.event("ManualCollect")
+local settingsEvent = Remotes.event("UpdateSettings")
 local stateUpdate = Remotes.event("StateUpdate")
 local offlineEvent = Remotes.event("OfflineEarnings")
 local notify = Remotes.event("Notify")
 local getState = Remotes.func("GetState")
 
 local handles = UI.build()
+local settingsPanel = Settings.build(handles.screenGui)
+
+-- Start ambient coin-rain in the dedicated background layer.
+Background.start(handles.backgroundLayer)
+
+-- Begin music; will silently no-op if no track ID is configured.
+Music.start()
+
+-- Settings -> apply locally + persist to server.
+local function applySettings(values: Settings.Values)
+	Sounds.setVolume(values.sfxVolume)
+	Music.setVolume(values.musicVolume)
+	settingsEvent:FireServer(values)
+end
+settingsPanel.onChange = applySettings
 
 -- Bind tactile feedback on every button at construction time.
 Effects.bindPressFeel(handles.qtyButton)
 Effects.bindPressFeel(handles.offlineCloseButton)
+Effects.bindPressFeel(settingsPanel.gearButton)
+Effects.bindPressFeel(settingsPanel.sfxButton)
+Effects.bindPressFeel(settingsPanel.musicButton)
+Effects.bindPressFeel(settingsPanel.closeButton)
 for _, h in pairs(handles.businesses) do
 	Effects.bindPressFeel(h.buyButton)
 	Effects.bindPressFeel(h.managerButton)
@@ -68,9 +91,13 @@ local prevProgress: { [string]: number } = {}
 local prevOwned: { [string]: number } = {}
 local prevHadManager: { [string]: boolean } = {}
 local prevMoney = 0
+-- Smoothly-animated value displayed in the HUD; lerps toward state.money.
+local displayedMoney = 0
 -- Suppress effects on the very first snapshot so a returning player doesn't
 -- see a flood of milestone banners on join.
 local snapshotsApplied = 0
+-- Whether we've pulled settings from the first snapshot yet.
+local settingsApplied = false
 
 local qtyIndex = 1
 local function currentQty(): any
@@ -134,6 +161,21 @@ local function applySnapshot(snap)
 			progress = b.progress or 0,
 		}
 	end
+
+	-- Apply persisted audio settings on the very first snapshot.
+	if not settingsApplied and type(snap.settings) == "table" then
+		local v = {
+			sfxVolume = tonumber(snap.settings.sfxVolume) or 1.0,
+			musicVolume = tonumber(snap.settings.musicVolume) or 0.6,
+		}
+		settingsPanel.setValues(v)
+		Sounds.setVolume(v.sfxVolume)
+		Music.setVolume(v.musicVolume)
+		settingsApplied = true
+		-- Also seed the displayed money so the first frame doesn't tween from 0.
+		displayedMoney = state.money
+	end
+
 	snapshotsApplied += 1
 end
 
@@ -262,7 +304,7 @@ local function emitEdgeEffects()
 
 	-- Money-increase flash on the HUD label.
 	if state.money > prevMoney + 0.5 then
-		Effects.flashColor(handles.moneyLabel, Theme.colors.goldBright, Theme.colors.gold)
+		Effects.flashColor(handles.moneyLabel, Color3.fromRGB(255, 255, 240), Theme.colors.goldBright)
 		-- Punch scale only on big jumps (purchases reduce, cycles bump).
 		local delta = state.money - prevMoney
 		if delta > prevMoney * 0.05 and prevMoney > 0 then
@@ -287,10 +329,23 @@ local function totalRevenuePerSecond(): number
 	return total
 end
 
+-- Smoothly catch displayedMoney up to state.money. Snaps when very close
+-- to avoid lingering fractional remainders.
+local function tickMoneyDisplay(dt: number)
+	local target = state.money
+	if math.abs(target - displayedMoney) < 0.01 then
+		displayedMoney = target
+		return
+	end
+	-- Time-based exponential decay; ~85% of the gap closes every 0.2s.
+	local lerp = 1 - math.exp(-dt * 9)
+	displayedMoney += (target - displayedMoney) * lerp
+end
+
 local function refreshUI()
-	handles.moneyLabel.Text = Format.money(state.money)
+	handles.moneyLabel.Text = Format.money(displayedMoney)
 	local rps = totalRevenuePerSecond()
-	handles.rpsLabel.Text = if rps > 0 then Format.money(rps) .. "/sec" else "Tap to earn"
+	handles.rpsLabel.Text = if rps > 0 then Format.money(rps) .. "/sec" else "Tap a business to earn"
 
 	local qty = currentQty()
 	for id, h in pairs(handles.businesses) do
@@ -380,5 +435,6 @@ RunService.RenderStepped:Connect(function()
 	lastFrame = now
 	advanceLocal(dt)
 	emitEdgeEffects()
+	tickMoneyDisplay(dt)
 	refreshUI()
 end)

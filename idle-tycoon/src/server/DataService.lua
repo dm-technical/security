@@ -50,22 +50,33 @@ local function retry<T>(fn: () -> T): (boolean, T?)
 	return false, nil
 end
 
+export type ProfileSettings = {
+	sfxVolume: number,
+	musicVolume: number,
+}
+
 export type ProfileData = {
 	version: number,
 	money: number,
 	businesses: { [string]: { owned: number, hasManager: boolean, progress: number } },
+	settings: ProfileSettings,
 	lastOnline: number, -- os.time()
 	totalEarned: number,
 	createdAt: number,
 }
 
-local CURRENT_VERSION = 1
+local CURRENT_VERSION = 2
+
+local function defaultSettings(): ProfileSettings
+	return { sfxVolume = 1.0, musicVolume = 0.6 }
+end
 
 local function defaultProfile(): ProfileData
 	return {
 		version = CURRENT_VERSION,
 		money = 0, -- caller seeds with starting money
 		businesses = {},
+		settings = defaultSettings(),
 		lastOnline = os.time(),
 		totalEarned = 0,
 		createdAt = os.time(),
@@ -77,15 +88,21 @@ local function migrate(data: any): ProfileData
 	if type(data) ~= "table" then
 		return defaultProfile()
 	end
-	if not data.version then
-		data.version = CURRENT_VERSION
-	end
-	-- Future: if data.version == 1 then ... end
 	data.businesses = data.businesses or {}
 	data.money = tonumber(data.money) or 0
 	data.totalEarned = tonumber(data.totalEarned) or 0
 	data.lastOnline = tonumber(data.lastOnline) or os.time()
 	data.createdAt = tonumber(data.createdAt) or os.time()
+
+	-- v1 -> v2: add settings.
+	if not data.settings or type(data.settings) ~= "table" then
+		data.settings = defaultSettings()
+	else
+		data.settings.sfxVolume = tonumber(data.settings.sfxVolume) or 1.0
+		data.settings.musicVolume = tonumber(data.settings.musicVolume) or 0.6
+	end
+
+	data.version = CURRENT_VERSION
 	return data :: ProfileData
 end
 

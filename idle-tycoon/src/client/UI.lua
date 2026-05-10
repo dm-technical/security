@@ -33,6 +33,7 @@ export type BusinessHandle = {
 
 export type Handles = {
 	screenGui: ScreenGui,
+	backgroundLayer: Frame, -- non-blocking layer behind UI for ambient effects
 	moneyLabel: TextLabel,
 	rpsLabel: TextLabel,
 	qtyButton: TextButton,
@@ -261,31 +262,43 @@ function UI.build(): Handles
 	local root = Instance.new("Frame")
 	root.Name = "Root"
 	root.Size = UDim2.fromScale(1, 1)
-	root.BackgroundColor3 = Theme.colors.background
+	root.BackgroundColor3 = Theme.colors.bgBottom
 	root.BorderSizePixel = 0
 	root.Parent = screenGui
-	Theme.verticalGradient(root, Theme.colors.background, Theme.colors.backgroundDeep)
+	-- Vibrant green field, brighter at top.
+	Theme.verticalGradient(root, Theme.colors.bgTop, Theme.colors.bgBottom)
 
-	-- Header strip.
+	-- Ambient particle layer, non-blocking, sits between background and content.
+	local backgroundLayer = Instance.new("Frame")
+	backgroundLayer.Name = "BackgroundLayer"
+	backgroundLayer.Size = UDim2.fromScale(1, 1)
+	backgroundLayer.BackgroundTransparency = 1
+	backgroundLayer.ZIndex = 1
+	backgroundLayer.Active = false
+	backgroundLayer.Parent = root
+
+	-- Header strip with darker panel against the bright green field.
 	local header = Instance.new("Frame")
 	header.Name = "Header"
-	header.Size = UDim2.new(1, 0, 0, 90)
+	header.Size = UDim2.new(1, 0, 0, 96)
 	header.BackgroundColor3 = Theme.colors.panel
 	header.BorderSizePixel = 0
+	header.ZIndex = 4
 	header.Parent = root
 	Theme.padding(header, 14)
-	Theme.verticalGradient(header, Theme.colors.panel, Theme.colors.background)
+	Theme.stroke(header, Theme.colors.gold, 2, 0.2)
 
 	local moneyLabel = Instance.new("TextLabel")
 	moneyLabel.Size = UDim2.new(0.5, 0, 1, 0)
 	moneyLabel.BackgroundTransparency = 1
 	moneyLabel.TextXAlignment = Enum.TextXAlignment.Left
 	moneyLabel.Text = "$0"
-	moneyLabel.TextColor3 = Theme.colors.gold
+	moneyLabel.TextColor3 = Theme.colors.goldBright
 	moneyLabel.Font = Theme.font.display
-	moneyLabel.TextSize = 40
-	moneyLabel.TextStrokeTransparency = 0.6
-	moneyLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
+	moneyLabel.TextSize = 48
+	moneyLabel.TextStrokeTransparency = 0.2
+	moneyLabel.TextStrokeColor3 = Theme.colors.goldDeep
+	moneyLabel.ZIndex = 5
 	moneyLabel.Parent = header
 
 	local rpsLabel = Instance.new("TextLabel")
@@ -293,35 +306,40 @@ function UI.build(): Handles
 	rpsLabel.Position = UDim2.fromScale(0.5, 0)
 	rpsLabel.BackgroundTransparency = 1
 	rpsLabel.TextXAlignment = Enum.TextXAlignment.Left
-	rpsLabel.Text = "Tap to earn"
-	rpsLabel.TextColor3 = Theme.colors.muted
-	rpsLabel.Font = Theme.font.bodyBold
+	rpsLabel.Text = "Tap a business to earn"
+	rpsLabel.TextColor3 = Theme.colors.buyBright
+	rpsLabel.Font = Theme.font.heading
 	rpsLabel.TextSize = 18
+	rpsLabel.ZIndex = 5
 	rpsLabel.Parent = header
 
+	-- Position qty button left of the settings gear (which lives at top-right).
 	local qtyButton = Instance.new("TextButton")
 	qtyButton.Size = UDim2.new(0, 110, 0, 56)
-	qtyButton.Position = UDim2.new(1, -120, 0.5, -28)
-	qtyButton.BackgroundColor3 = Theme.colors.accent
+	qtyButton.Position = UDim2.new(1, -180, 0.5, -28)
+	qtyButton.BackgroundColor3 = Theme.colors.buyAction
 	qtyButton.AutoButtonColor = false
 	qtyButton.Text = "BUY x1"
 	qtyButton.TextColor3 = Theme.colors.text
 	qtyButton.Font = Theme.font.heading
 	qtyButton.TextSize = 18
+	qtyButton.ZIndex = 5
 	qtyButton.Parent = header
-	Theme.corner(qtyButton, 10)
+	Theme.corner(qtyButton, 12)
+	Theme.stroke(qtyButton, Theme.colors.buyBright, 2, 0)
 
 	-- Scrolling list of businesses.
 	local scroll = Instance.new("ScrollingFrame")
 	scroll.Name = "Businesses"
-	scroll.Size = UDim2.new(1, 0, 1, -90)
-	scroll.Position = UDim2.fromOffset(0, 90)
+	scroll.Size = UDim2.new(1, 0, 1, -96)
+	scroll.Position = UDim2.fromOffset(0, 96)
 	scroll.BackgroundTransparency = 1
 	scroll.BorderSizePixel = 0
 	scroll.ScrollBarThickness = 6
-	scroll.ScrollBarImageColor3 = Theme.colors.muted
+	scroll.ScrollBarImageColor3 = Theme.colors.gold
 	scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
 	scroll.CanvasSize = UDim2.new()
+	scroll.ZIndex = 3
 	scroll.Parent = root
 	Theme.padding(scroll, 12)
 
@@ -411,6 +429,7 @@ function UI.build(): Handles
 
 	return {
 		screenGui = screenGui,
+		backgroundLayer = backgroundLayer,
 		moneyLabel = moneyLabel,
 		rpsLabel = rpsLabel,
 		qtyButton = qtyButton,

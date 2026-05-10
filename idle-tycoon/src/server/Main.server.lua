@@ -16,6 +16,7 @@ local EconomyService = require(script.Parent.EconomyService)
 local buyEvent = Remotes.event("BuyBusiness")
 local hireEvent = Remotes.event("HireManager")
 local manualEvent = Remotes.event("ManualCollect")
+local settingsEvent = Remotes.event("UpdateSettings")
 local stateUpdate = Remotes.event("StateUpdate")
 local offlineEvent = Remotes.event("OfflineEarnings")
 local notify = Remotes.event("Notify")
@@ -118,6 +119,13 @@ manualEvent.OnServerEvent:Connect(function(player: Player, businessId: any)
 	if not profile then return end
 	EconomyService.manualCollect(profile, businessId)
 	-- No state push here — the tick loop will reflect progress shortly.
+end)
+
+settingsEvent.OnServerEvent:Connect(function(player: Player, payload: any)
+	local profile = DataService.get(player)
+	if not profile then return end
+	EconomyService.updateSettings(profile, payload)
+	-- No state push needed; client already updated locally. Persists on next autosave.
 end)
 
 -- Tick loop -----------------------------------------------------------------
