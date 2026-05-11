@@ -138,7 +138,11 @@ function EconomyService.hireManager(profile, businessId: string): (boolean, stri
 end
 
 -- Begin a manual production cycle. Only meaningful when no manager is hired.
+-- Always increments totalClicks (even if no cycle starts) so the achievement
+-- ticks up when players are tapping while locked-out businesses are unlocked.
 function EconomyService.manualCollect(profile, businessId: string): boolean
+	profile.totalClicks = (profile.totalClicks or 0) + 1
+
 	local def = Config.BUSINESS_BY_ID[businessId]
 	if not def then return false end
 	local b = getOrInitBusiness(profile, businessId)
@@ -155,10 +159,20 @@ function EconomyService.snapshot(profile)
 	for id, b in pairs(profile.businesses) do
 		biz[id] = { owned = b.owned, hasManager = b.hasManager, progress = b.progress }
 	end
+	-- Copy achievement state (small map; cheap to send).
+	local ach = {}
+	for id, state in pairs(profile.achievements or {}) do
+		ach[id] = { unlocked = state.unlocked, unlockedAt = state.unlockedAt }
+	end
 	return {
 		money = profile.money,
+		gems = profile.gems or 0,
+		prestige = profile.prestige or 0,
 		totalEarned = profile.totalEarned,
+		totalClicks = profile.totalClicks or 0,
 		businesses = biz,
+		achievements = ach,
+		dailyClaimedAt = profile.dailyClaimedAt or 0,
 		settings = {
 			sfxVolume = profile.settings.sfxVolume,
 			musicVolume = profile.settings.musicVolume,

@@ -3,23 +3,23 @@
 -- three-button boost row across the bottom. All three areas are stubbed
 -- visually now and will be wired to gameplay systems in a later phase.
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Achievements = require(Shared.Achievements)
+
 local Theme = require(script.Parent.Theme)
 
 local RightPanel = {}
 
-export type AchievementStub = {
-	id: string,
-	icon: string,
-	title: string,
-	subtitle: string,
-	progress: number, -- 0-1
-	reward: number,   -- gems
-}
-
-local STUB_ACHIEVEMENTS: { AchievementStub } = {
-	{ id = "first_million",    icon = "💰", title = "First Million",   subtitle = "Earn $1,000,000 total", progress = 0,   reward = 50 },
-	{ id = "business_tycoon",  icon = "🏢", title = "Business Tycoon", subtitle = "Own 50 businesses",      progress = 0,   reward = 75 },
-	{ id = "click_master",     icon = "👆", title = "Click Master",    subtitle = "Perform 1,000 clicks",   progress = 0,   reward = 25 },
+export type AchievementRowHandle = {
+	frame: Frame,
+	titleLabel: TextLabel,
+	subtitleLabel: TextLabel,
+	progressBar: Frame,
+	progressFill: Frame,
+	percentLabel: TextLabel,
+	gemLabel: TextLabel,
+	iconLabel: TextLabel,
 }
 
 export type BoostButton = {
@@ -37,6 +37,7 @@ export type Handle = {
 	activeBoostSubLabel: TextLabel,
 	activeBoostTimerLabel: TextLabel,
 	achievementsContainer: Frame,
+	achievementRows: { [string]: AchievementRowHandle },
 	viewAllButton: TextButton,
 	boostRow: Frame,
 	boosts: { [string]: BoostButton },
@@ -239,9 +240,17 @@ function RightPanel.build(parent: Instance): Handle
 	achLayout.SortOrder = Enum.SortOrder.LayoutOrder
 	achLayout.Parent = achievementsContainer
 
-	for i, ach in ipairs(STUB_ACHIEVEMENTS) do
+	-- Show up to 3 in-progress achievements; full list lives behind View All.
+	local achievementRows: { [string]: AchievementRowHandle } = {}
+	local visibleDefs = {}
+	for _, def in ipairs(Achievements.DEFINITIONS) do
+		if #visibleDefs >= 3 then break end
+		table.insert(visibleDefs, def)
+	end
+
+	for i, def in ipairs(visibleDefs) do
 		local row = Instance.new("Frame")
-		row.Size = UDim2.new(1, 0, 0, 52)
+		row.Size = UDim2.new(1, 0, 0, 56)
 		row.LayoutOrder = i
 		row.BackgroundColor3 = Theme.colors.panelAlt
 		row.BorderSizePixel = 0
@@ -250,21 +259,21 @@ function RightPanel.build(parent: Instance): Handle
 		Theme.padding(row, 8)
 
 		local iconBox = Instance.new("TextLabel")
-		iconBox.Size = UDim2.fromOffset(36, 36)
+		iconBox.Size = UDim2.fromOffset(38, 38)
 		iconBox.AnchorPoint = Vector2.new(0, 0.5)
 		iconBox.Position = UDim2.fromScale(0, 0.5)
 		iconBox.BackgroundColor3 = Theme.colors.goldDeep
-		iconBox.Text = ach.icon
+		iconBox.Text = def.icon
 		iconBox.Font = Theme.font.heading
-		iconBox.TextSize = 18
+		iconBox.TextSize = 20
 		iconBox.Parent = row
 		Theme.corner(iconBox, 8)
 
 		local title = Instance.new("TextLabel")
-		title.Size = UDim2.new(1, -100, 0, 16)
-		title.Position = UDim2.fromOffset(42, 0)
+		title.Size = UDim2.new(1, -110, 0, 16)
+		title.Position = UDim2.fromOffset(46, 0)
 		title.BackgroundTransparency = 1
-		title.Text = ach.title
+		title.Text = def.name
 		title.TextColor3 = Theme.colors.text
 		title.TextXAlignment = Enum.TextXAlignment.Left
 		title.Font = Theme.font.heading
@@ -272,42 +281,66 @@ function RightPanel.build(parent: Instance): Handle
 		title.Parent = row
 
 		local sub = Instance.new("TextLabel")
-		sub.Size = UDim2.new(1, -100, 0, 12)
-		sub.Position = UDim2.fromOffset(42, 16)
+		sub.Size = UDim2.new(1, -110, 0, 13)
+		sub.Position = UDim2.fromOffset(46, 16)
 		sub.BackgroundTransparency = 1
-		sub.Text = ach.subtitle
+		sub.Text = def.description
 		sub.TextColor3 = Theme.colors.muted
 		sub.TextXAlignment = Enum.TextXAlignment.Left
 		sub.Font = Theme.font.body
-		sub.TextSize = 10
+		sub.TextSize = 11
 		sub.Parent = row
 
 		local barBg = Instance.new("Frame")
-		barBg.Size = UDim2.new(1, -100, 0, 6)
-		barBg.Position = UDim2.fromOffset(42, 30)
+		barBg.Size = UDim2.new(1, -110, 0, 7)
+		barBg.Position = UDim2.fromOffset(46, 32)
 		barBg.BackgroundColor3 = Color3.fromRGB(20, 24, 44)
 		barBg.BorderSizePixel = 0
 		barBg.Parent = row
 		Theme.corner(barBg, 3)
 
 		local barFill = Instance.new("Frame")
-		barFill.Size = UDim2.fromScale(ach.progress, 1)
+		barFill.Size = UDim2.fromScale(0, 1)
 		barFill.BackgroundColor3 = Theme.colors.buyAction
 		barFill.BorderSizePixel = 0
 		barFill.Parent = barBg
 		Theme.corner(barFill, 3)
 
+		-- Percentage label tucked next to the gem reward.
+		local percentLabel = Instance.new("TextLabel")
+		percentLabel.AnchorPoint = Vector2.new(1, 0)
+		percentLabel.Position = UDim2.new(1, 0, 0, 30)
+		percentLabel.Size = UDim2.fromOffset(50, 12)
+		percentLabel.BackgroundTransparency = 1
+		percentLabel.Text = "0%"
+		percentLabel.TextColor3 = Theme.colors.muted
+		percentLabel.TextXAlignment = Enum.TextXAlignment.Right
+		percentLabel.Font = Theme.font.bodyBold
+		percentLabel.TextSize = 11
+		percentLabel.Parent = row
+
 		local gemReward = Instance.new("TextLabel")
-		gemReward.AnchorPoint = Vector2.new(1, 0.5)
-		gemReward.Position = UDim2.new(1, 0, 0.5, 0)
-		gemReward.Size = UDim2.fromOffset(56, 30)
+		gemReward.AnchorPoint = Vector2.new(1, 0)
+		gemReward.Position = UDim2.fromScale(1, 0)
+		gemReward.Size = UDim2.fromOffset(60, 24)
 		gemReward.BackgroundTransparency = 1
-		gemReward.Text = "💎 " .. tostring(ach.reward)
+		gemReward.Text = "💎 " .. tostring(def.gemReward)
 		gemReward.TextColor3 = Theme.colors.gemBright
 		gemReward.TextXAlignment = Enum.TextXAlignment.Right
 		gemReward.Font = Theme.font.heading
 		gemReward.TextSize = 14
 		gemReward.Parent = row
+
+		achievementRows[def.id] = {
+			frame = row,
+			titleLabel = title,
+			subtitleLabel = sub,
+			progressBar = barBg,
+			progressFill = barFill,
+			percentLabel = percentLabel,
+			gemLabel = gemReward,
+			iconLabel = iconBox,
+		}
 	end
 
 	local viewAllButton = Instance.new("TextButton")
@@ -348,6 +381,7 @@ function RightPanel.build(parent: Instance): Handle
 		activeBoostSubLabel = activeBoostSubLabel,
 		activeBoostTimerLabel = activeBoostTimerLabel,
 		achievementsContainer = achievementsContainer,
+		achievementRows = achievementRows,
 		viewAllButton = viewAllButton,
 		boostRow = boostRowFrame,
 		boosts = boosts,

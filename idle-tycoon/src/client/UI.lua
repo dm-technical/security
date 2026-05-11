@@ -25,11 +25,17 @@ export type Handles = {
 	qtyButton: TextButton,
 	gemLabel: TextLabel,
 	gemAddButton: TextButton,
+	-- Bottom event bar
+	eventTimerLabel: TextLabel,
+	eventActivateButton: TextButton,
+	inviteButton: TextButton,
 	-- Player card
 	playerCard: Frame,
 	playerNameLabel: TextLabel,
+	playerPrestigeLabel: TextLabel,
 	playerLevelLabel: TextLabel,
 	playerXpFill: Frame,
+	playerXpPercentLabel: TextLabel,
 	-- Sub-systems
 	sidebar: LeftSidebar.Handle,
 	rightPanel: RightPanel.Handle,
@@ -42,11 +48,13 @@ export type Handles = {
 	offlineCloseButton: TextButton,
 }
 
-local function buildPlayerCard(parent: Instance): (Frame, TextLabel, TextLabel, Frame)
+local function buildPlayerCard(parent: Instance): (Frame, TextLabel, TextLabel, TextLabel, Frame, TextLabel)
+	local player = Players.LocalPlayer
+
 	local card = Instance.new("Frame")
 	card.Name = "PlayerCard"
 	card.Position = UDim2.fromOffset(12, 12)
-	card.Size = UDim2.new(0, 280, 0, 80)
+	card.Size = UDim2.new(0, 300, 0, 96)
 	card.BackgroundColor3 = Theme.colors.panel
 	card.BorderSizePixel = 0
 	card.Parent = parent
@@ -54,38 +62,52 @@ local function buildPlayerCard(parent: Instance): (Frame, TextLabel, TextLabel, 
 	Theme.stroke(card, Theme.colors.panelBorder, 1, 0.3)
 	Theme.padding(card, 10)
 
+	-- Roblox avatar headshot via the rbxthumb URI scheme (resolves async).
 	local avatarFrame = Instance.new("Frame")
-	avatarFrame.Size = UDim2.fromOffset(60, 60)
+	avatarFrame.Size = UDim2.fromOffset(76, 76)
 	avatarFrame.AnchorPoint = Vector2.new(0, 0.5)
 	avatarFrame.Position = UDim2.fromScale(0, 0.5)
-	avatarFrame.BackgroundColor3 = Theme.colors.buyAction
+	avatarFrame.BackgroundColor3 = Theme.colors.panelAlt
 	avatarFrame.BorderSizePixel = 0
 	avatarFrame.Parent = card
-	Theme.corner(avatarFrame, 12)
-	Theme.stroke(avatarFrame, Theme.colors.buyBright, 2, 0)
+	Theme.corner(avatarFrame, 14)
+	Theme.stroke(avatarFrame, Theme.colors.gold, 2, 0)
 
-	local avatarIcon = Instance.new("TextLabel")
-	avatarIcon.Size = UDim2.fromScale(1, 1)
-	avatarIcon.BackgroundTransparency = 1
-	avatarIcon.Text = "🍋"
-	avatarIcon.Font = Theme.font.heading
-	avatarIcon.TextScaled = true
-	avatarIcon.Parent = avatarFrame
+	local avatarImage = Instance.new("ImageLabel")
+	avatarImage.Size = UDim2.fromScale(1, 1)
+	avatarImage.BackgroundTransparency = 1
+	avatarImage.Image = "rbxthumb://type=AvatarHeadShot&id=" .. tostring(player.UserId) .. "&w=150&h=150"
+	avatarImage.ScaleType = Enum.ScaleType.Fit
+	avatarImage.Parent = avatarFrame
 
 	local nameLabel = Instance.new("TextLabel")
-	nameLabel.Size = UDim2.new(1, -72, 0, 20)
-	nameLabel.Position = UDim2.fromOffset(70, 4)
+	nameLabel.Size = UDim2.new(1, -88, 0, 22)
+	nameLabel.Position = UDim2.fromOffset(86, 0)
 	nameLabel.BackgroundTransparency = 1
-	nameLabel.Text = "Player"
+	nameLabel.Text = player.DisplayName
 	nameLabel.TextColor3 = Theme.colors.text
 	nameLabel.TextXAlignment = Enum.TextXAlignment.Left
 	nameLabel.Font = Theme.font.heading
-	nameLabel.TextSize = 16
+	nameLabel.TextSize = 18
+	nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
 	nameLabel.Parent = card
 
+	-- "👑 Prestige X" line.
+	local prestigeLabel = Instance.new("TextLabel")
+	prestigeLabel.Size = UDim2.new(1, -88, 0, 18)
+	prestigeLabel.Position = UDim2.fromOffset(86, 22)
+	prestigeLabel.BackgroundTransparency = 1
+	prestigeLabel.Text = "👑 Prestige 0"
+	prestigeLabel.TextColor3 = Theme.colors.gemBright
+	prestigeLabel.TextXAlignment = Enum.TextXAlignment.Left
+	prestigeLabel.Font = Theme.font.bodyBold
+	prestigeLabel.TextSize = 13
+	prestigeLabel.Parent = card
+
+	-- LVL bar at the bottom of the card.
 	local levelBg = Instance.new("Frame")
-	levelBg.Size = UDim2.new(1, -72, 0, 24)
-	levelBg.Position = UDim2.fromOffset(70, 28)
+	levelBg.Size = UDim2.new(1, -88, 0, 24)
+	levelBg.Position = UDim2.new(0, 86, 1, -28)
 	levelBg.BackgroundColor3 = Color3.fromRGB(20, 24, 44)
 	levelBg.BorderSizePixel = 0
 	levelBg.Parent = card
@@ -93,11 +115,11 @@ local function buildPlayerCard(parent: Instance): (Frame, TextLabel, TextLabel, 
 
 	local levelLabel = Instance.new("TextLabel")
 	levelLabel.AnchorPoint = Vector2.new(0, 0.5)
-	levelLabel.Position = UDim2.new(0, 8, 0.5, 0)
-	levelLabel.Size = UDim2.fromOffset(48, 18)
-	levelLabel.BackgroundColor3 = Theme.colors.gold
-	levelLabel.Text = "lvl 1"
-	levelLabel.TextColor3 = Theme.colors.textDark
+	levelLabel.Position = UDim2.new(0, 6, 0.5, 0)
+	levelLabel.Size = UDim2.fromOffset(56, 18)
+	levelLabel.BackgroundColor3 = Theme.colors.gem
+	levelLabel.Text = "LVL 1"
+	levelLabel.TextColor3 = Theme.colors.text
 	levelLabel.Font = Theme.font.display
 	levelLabel.TextSize = 12
 	levelLabel.Parent = levelBg
@@ -105,21 +127,34 @@ local function buildPlayerCard(parent: Instance): (Frame, TextLabel, TextLabel, 
 
 	local xpBar = Instance.new("Frame")
 	xpBar.AnchorPoint = Vector2.new(1, 0.5)
-	xpBar.Position = UDim2.new(1, -6, 0.5, 0)
-	xpBar.Size = UDim2.new(1, -68, 0, 8)
+	xpBar.Position = UDim2.new(1, -8, 0.5, 0)
+	xpBar.Size = UDim2.new(1, -76, 0, 10)
 	xpBar.BackgroundColor3 = Color3.fromRGB(30, 36, 56)
 	xpBar.BorderSizePixel = 0
 	xpBar.Parent = levelBg
-	Theme.corner(xpBar, 4)
+	Theme.corner(xpBar, 5)
 
 	local xpFill = Instance.new("Frame")
 	xpFill.Size = UDim2.fromScale(0.3, 1)
-	xpFill.BackgroundColor3 = Theme.colors.gold
+	xpFill.BackgroundColor3 = Theme.colors.gemBright
 	xpFill.BorderSizePixel = 0
 	xpFill.Parent = xpBar
-	Theme.corner(xpFill, 4)
+	Theme.corner(xpFill, 5)
 
-	return card, nameLabel, levelLabel, xpFill
+	-- Percentage label inside the xp bar.
+	local xpPercentLabel = Instance.new("TextLabel")
+	xpPercentLabel.AnchorPoint = Vector2.new(1, 0.5)
+	xpPercentLabel.Position = UDim2.new(1, -4, 0.5, 0)
+	xpPercentLabel.Size = UDim2.fromOffset(38, 12)
+	xpPercentLabel.BackgroundTransparency = 1
+	xpPercentLabel.Text = "30%"
+	xpPercentLabel.TextColor3 = Theme.colors.text
+	xpPercentLabel.Font = Theme.font.bodyBold
+	xpPercentLabel.TextSize = 10
+	xpPercentLabel.TextXAlignment = Enum.TextXAlignment.Right
+	xpPercentLabel.Parent = xpBar
+
+	return card, nameLabel, prestigeLabel, levelLabel, xpFill, xpPercentLabel
 end
 
 local function buildHeaderBar(parent: Instance): (TextLabel, TextLabel, TextButton, TextLabel, TextButton, TextButton)
@@ -255,18 +290,18 @@ function UI.build(): Handles
 	backgroundLayer.Parent = root
 
 	-- Top row: player card + wallet/header + gems.
-	local playerCard, playerNameLabel, playerLevelLabel, playerXpFill = buildPlayerCard(root)
+	local playerCard, playerNameLabel, playerPrestigeLabel, playerLevelLabel, playerXpFill, playerXpPercentLabel = buildPlayerCard(root)
 	local moneyLabel, rpsLabel, qtyButton, gemLabel, gemAddButton = buildHeaderBar(root)
 
 	-- Sub-panels.
 	local sidebar = LeftSidebar.build(root)
 	local rightPanel = RightPanel.build(root)
 
-	-- Center scrolling business list.
+	-- Center scrolling business list. Leaves room for the bottom event bar.
 	local centerScroll = Instance.new("ScrollingFrame")
 	centerScroll.Name = "Businesses"
 	centerScroll.Position = UDim2.fromOffset(244, 104)
-	centerScroll.Size = UDim2.new(1, -558, 1, -116)
+	centerScroll.Size = UDim2.new(1, -558, 1, -198)
 	centerScroll.BackgroundTransparency = 1
 	centerScroll.BorderSizePixel = 0
 	centerScroll.ScrollBarThickness = 6
@@ -286,6 +321,129 @@ function UI.build(): Handles
 	for i, def in ipairs(Config.BUSINESSES) do
 		businesses[def.id] = BusinessCard.build(centerScroll, def, i)
 	end
+
+	-- Bottom event bar: Double Cash Event (left) + Invite Friends (right).
+	local bottomBar = Instance.new("Frame")
+	bottomBar.Name = "BottomBar"
+	bottomBar.AnchorPoint = Vector2.new(0, 1)
+	bottomBar.Position = UDim2.new(0, 244, 1, -12)
+	bottomBar.Size = UDim2.new(1, -558, 0, 70)
+	bottomBar.BackgroundTransparency = 1
+	bottomBar.Parent = root
+
+	local eventCard = Instance.new("Frame")
+	eventCard.Size = UDim2.new(0.6, -8, 1, 0)
+	eventCard.BackgroundColor3 = Theme.colors.panel
+	eventCard.BorderSizePixel = 0
+	eventCard.Parent = bottomBar
+	Theme.corner(eventCard, 14)
+	Theme.stroke(eventCard, Theme.colors.gold, 2, 0.2)
+	Theme.padding(eventCard, 10)
+
+	local eventIcon = Instance.new("TextLabel")
+	eventIcon.Size = UDim2.fromOffset(44, 44)
+	eventIcon.AnchorPoint = Vector2.new(0, 0.5)
+	eventIcon.Position = UDim2.fromScale(0, 0.5)
+	eventIcon.BackgroundColor3 = Theme.colors.gold
+	eventIcon.Text = "x2"
+	eventIcon.TextColor3 = Theme.colors.textDark
+	eventIcon.Font = Theme.font.display
+	eventIcon.TextSize = 18
+	eventIcon.Parent = eventCard
+	Theme.corner(eventIcon, 10)
+
+	local eventTitle = Instance.new("TextLabel")
+	eventTitle.Size = UDim2.new(1, -160, 0, 22)
+	eventTitle.Position = UDim2.fromOffset(54, 4)
+	eventTitle.BackgroundTransparency = 1
+	eventTitle.Text = "DOUBLE CASH EVENT!"
+	eventTitle.TextColor3 = Theme.colors.gold
+	eventTitle.TextXAlignment = Enum.TextXAlignment.Left
+	eventTitle.Font = Theme.font.display
+	eventTitle.TextSize = 16
+	eventTitle.Parent = eventCard
+
+	local eventTimerLabel = Instance.new("TextLabel")
+	eventTimerLabel.Size = UDim2.new(1, -160, 0, 20)
+	eventTimerLabel.Position = UDim2.fromOffset(54, 26)
+	eventTimerLabel.BackgroundTransparency = 1
+	eventTimerLabel.Text = "⏰  23:59:59"
+	eventTimerLabel.TextColor3 = Theme.colors.text
+	eventTimerLabel.TextXAlignment = Enum.TextXAlignment.Left
+	eventTimerLabel.Font = Theme.font.bodyBold
+	eventTimerLabel.TextSize = 14
+	eventTimerLabel.Parent = eventCard
+
+	local eventActivateButton = Instance.new("TextButton")
+	eventActivateButton.AnchorPoint = Vector2.new(1, 0.5)
+	eventActivateButton.Position = UDim2.new(1, 0, 0.5, 0)
+	eventActivateButton.Size = UDim2.fromOffset(140, 40)
+	eventActivateButton.BackgroundColor3 = Theme.colors.buyAction
+	eventActivateButton.AutoButtonColor = false
+	eventActivateButton.Text = "ACTIVATE"
+	eventActivateButton.TextColor3 = Theme.colors.text
+	eventActivateButton.Font = Theme.font.display
+	eventActivateButton.TextSize = 16
+	eventActivateButton.Parent = eventCard
+	Theme.corner(eventActivateButton, 10)
+	Theme.stroke(eventActivateButton, Theme.colors.buyBright, 2, 0)
+
+	local inviteCard = Instance.new("Frame")
+	inviteCard.AnchorPoint = Vector2.new(1, 0)
+	inviteCard.Position = UDim2.fromScale(1, 0)
+	inviteCard.Size = UDim2.new(0.4, -8, 1, 0)
+	inviteCard.BackgroundColor3 = Theme.colors.panel
+	inviteCard.BorderSizePixel = 0
+	inviteCard.Parent = bottomBar
+	Theme.corner(inviteCard, 14)
+	Theme.stroke(inviteCard, Theme.colors.manager, 2, 0.2)
+	Theme.padding(inviteCard, 10)
+
+	local inviteAvatars = Instance.new("TextLabel")
+	inviteAvatars.Size = UDim2.fromOffset(44, 44)
+	inviteAvatars.AnchorPoint = Vector2.new(0, 0.5)
+	inviteAvatars.Position = UDim2.fromScale(0, 0.5)
+	inviteAvatars.BackgroundTransparency = 1
+	inviteAvatars.Text = "👥"
+	inviteAvatars.Font = Theme.font.heading
+	inviteAvatars.TextSize = 28
+	inviteAvatars.Parent = inviteCard
+
+	local inviteTitle = Instance.new("TextLabel")
+	inviteTitle.Size = UDim2.new(1, -160, 0, 20)
+	inviteTitle.Position = UDim2.fromOffset(50, 4)
+	inviteTitle.BackgroundTransparency = 1
+	inviteTitle.Text = "Invite Friends!"
+	inviteTitle.TextColor3 = Theme.colors.text
+	inviteTitle.TextXAlignment = Enum.TextXAlignment.Left
+	inviteTitle.Font = Theme.font.heading
+	inviteTitle.TextSize = 15
+	inviteTitle.Parent = inviteCard
+
+	local inviteSubtitle = Instance.new("TextLabel")
+	inviteSubtitle.Size = UDim2.new(1, -160, 0, 18)
+	inviteSubtitle.Position = UDim2.fromOffset(50, 24)
+	inviteSubtitle.BackgroundTransparency = 1
+	inviteSubtitle.Text = "Earn 10% more cash!"
+	inviteSubtitle.TextColor3 = Theme.colors.muted
+	inviteSubtitle.TextXAlignment = Enum.TextXAlignment.Left
+	inviteSubtitle.Font = Theme.font.body
+	inviteSubtitle.TextSize = 12
+	inviteSubtitle.Parent = inviteCard
+
+	local inviteButton = Instance.new("TextButton")
+	inviteButton.AnchorPoint = Vector2.new(1, 0.5)
+	inviteButton.Position = UDim2.new(1, 0, 0.5, 0)
+	inviteButton.Size = UDim2.fromOffset(110, 40)
+	inviteButton.BackgroundColor3 = Theme.colors.manager
+	inviteButton.AutoButtonColor = false
+	inviteButton.Text = "INVITE"
+	inviteButton.TextColor3 = Theme.colors.text
+	inviteButton.Font = Theme.font.display
+	inviteButton.TextSize = 16
+	inviteButton.Parent = inviteCard
+	Theme.corner(inviteButton, 10)
+	Theme.stroke(inviteButton, Theme.colors.managerBright, 2, 0)
 
 	-- Notification stack: bottom-center so it doesn't fight the right panel.
 	local notifyContainer = Instance.new("Frame")
@@ -371,10 +529,15 @@ function UI.build(): Handles
 		qtyButton = qtyButton,
 		gemLabel = gemLabel,
 		gemAddButton = gemAddButton,
+		eventTimerLabel = eventTimerLabel,
+		eventActivateButton = eventActivateButton,
+		inviteButton = inviteButton,
 		playerCard = playerCard,
 		playerNameLabel = playerNameLabel,
+		playerPrestigeLabel = playerPrestigeLabel,
 		playerLevelLabel = playerLevelLabel,
 		playerXpFill = playerXpFill,
+		playerXpPercentLabel = playerXpPercentLabel,
 		sidebar = sidebar,
 		rightPanel = rightPanel,
 		businesses = businesses,

@@ -18,9 +18,10 @@ export type NavTab = {
 local TABS: { NavTab } = {
 	{ id = "businesses",  label = "Businesses",   icon = "🏪", enabled = true  },
 	{ id = "upgrades",    label = "Upgrades",     icon = "📈", enabled = false },
-	{ id = "prestige",    label = "Prestige",     icon = "⭐", enabled = false },
+	{ id = "prestige",    label = "Prestige",     icon = "👑", enabled = false },
 	{ id = "achievements",label = "Achievements", icon = "🏆", enabled = false },
 	{ id = "shop",        label = "Shop",         icon = "🛒", enabled = false },
+	{ id = "boosts",      label = "Boosts",       icon = "⚡", enabled = false },
 }
 
 export type Handle = {
@@ -28,10 +29,13 @@ export type Handle = {
 	dailyRewardFrame: Frame,
 	dailyRewardLabel: TextLabel,
 	dailyTimerLabel: TextLabel,
+	dailyClaimButton: TextButton,
 	tabs: { [string]: TextButton },
 	activeTab: string,
 	onTab: ((id: string, enabled: boolean) -> ())?,
+	onClaimDaily: (() -> ())?,
 	setActiveTab: (id: string) -> (),
+	setDailyClaimEnabled: (enabled: boolean) -> (),
 }
 
 local function styleTab(button: TextButton, label: TextLabel, isActive: boolean, enabled: boolean)
@@ -69,10 +73,13 @@ function LeftSidebar.build(parent: Instance): Handle
 		dailyRewardFrame = (nil :: any),
 		dailyRewardLabel = (nil :: any),
 		dailyTimerLabel = (nil :: any),
+		dailyClaimButton = (nil :: any),
 		tabs = {},
 		activeTab = "businesses",
 		onTab = nil,
+		onClaimDaily = nil,
 		setActiveTab = function(_) end,
+		setDailyClaimEnabled = function(_) end,
 	}
 
 	local tabRefs: { [string]: { button: TextButton, label: TextLabel, def: NavTab } } = {}
@@ -134,49 +141,81 @@ function LeftSidebar.build(parent: Instance): Handle
 	dailyRewardFrame.Name = "DailyReward"
 	dailyRewardFrame.AnchorPoint = Vector2.new(0, 1)
 	dailyRewardFrame.Position = UDim2.new(0, 0, 1, 0)
-	dailyRewardFrame.Size = UDim2.new(1, 0, 0, 96)
+	dailyRewardFrame.Size = UDim2.new(1, 0, 0, 132)
 	dailyRewardFrame.BackgroundColor3 = Theme.colors.panel
 	dailyRewardFrame.BorderSizePixel = 0
 	dailyRewardFrame.Parent = frame
 	Theme.corner(dailyRewardFrame, 14)
 	Theme.stroke(dailyRewardFrame, Theme.colors.gold, 2, 0.3)
-	Theme.padding(dailyRewardFrame, 12)
+	Theme.padding(dailyRewardFrame, 10)
 
 	local giftIcon = Instance.new("TextLabel")
-	giftIcon.Size = UDim2.fromOffset(48, 48)
-	giftIcon.Position = UDim2.fromScale(0, 0.5)
-	giftIcon.AnchorPoint = Vector2.new(0, 0.5)
+	giftIcon.Size = UDim2.fromOffset(44, 44)
+	giftIcon.Position = UDim2.fromOffset(0, 0)
 	giftIcon.BackgroundTransparency = 1
 	giftIcon.Text = "🎁"
 	giftIcon.Font = Theme.font.heading
-	giftIcon.TextSize = 32
+	giftIcon.TextSize = 30
 	giftIcon.Parent = dailyRewardFrame
 
 	local dailyRewardLabel = Instance.new("TextLabel")
-	dailyRewardLabel.Size = UDim2.new(1, -60, 0, 22)
-	dailyRewardLabel.Position = UDim2.fromOffset(56, 16)
+	dailyRewardLabel.Size = UDim2.new(1, -52, 0, 20)
+	dailyRewardLabel.Position = UDim2.fromOffset(52, 0)
 	dailyRewardLabel.BackgroundTransparency = 1
-	dailyRewardLabel.Text = "Daily Reward"
+	dailyRewardLabel.Text = "DAILY REWARD"
 	dailyRewardLabel.TextColor3 = Theme.colors.gold
 	dailyRewardLabel.TextXAlignment = Enum.TextXAlignment.Left
-	dailyRewardLabel.Font = Theme.font.heading
-	dailyRewardLabel.TextSize = 16
+	dailyRewardLabel.Font = Theme.font.display
+	dailyRewardLabel.TextSize = 14
 	dailyRewardLabel.Parent = dailyRewardFrame
 
 	local dailyTimerLabel = Instance.new("TextLabel")
-	dailyTimerLabel.Size = UDim2.new(1, -60, 0, 24)
-	dailyTimerLabel.Position = UDim2.fromOffset(56, 40)
+	dailyTimerLabel.Size = UDim2.new(1, -52, 0, 22)
+	dailyTimerLabel.Position = UDim2.fromOffset(52, 22)
 	dailyTimerLabel.BackgroundTransparency = 1
 	dailyTimerLabel.Text = "23:59:59"
 	dailyTimerLabel.TextColor3 = Theme.colors.text
 	dailyTimerLabel.TextXAlignment = Enum.TextXAlignment.Left
 	dailyTimerLabel.Font = Theme.font.display
-	dailyTimerLabel.TextSize = 22
+	dailyTimerLabel.TextSize = 18
 	dailyTimerLabel.Parent = dailyRewardFrame
+
+	local dailyClaimButton = Instance.new("TextButton")
+	dailyClaimButton.AnchorPoint = Vector2.new(0, 1)
+	dailyClaimButton.Position = UDim2.new(0, 0, 1, 0)
+	dailyClaimButton.Size = UDim2.new(1, 0, 0, 40)
+	dailyClaimButton.BackgroundColor3 = Theme.colors.buyAction
+	dailyClaimButton.AutoButtonColor = false
+	dailyClaimButton.Text = "CLAIM"
+	dailyClaimButton.TextColor3 = Theme.colors.text
+	dailyClaimButton.Font = Theme.font.display
+	dailyClaimButton.TextSize = 16
+	dailyClaimButton.Parent = dailyRewardFrame
+	Theme.corner(dailyClaimButton, 10)
+	Theme.stroke(dailyClaimButton, Theme.colors.buyBright, 2, 0)
+
+	dailyClaimButton.MouseButton1Click:Connect(function()
+		if handle.onClaimDaily then handle.onClaimDaily() end
+	end)
+
+	handle.setDailyClaimEnabled = function(enabled: boolean)
+		if enabled then
+			dailyClaimButton.BackgroundColor3 = Theme.colors.buyAction
+			dailyClaimButton.TextColor3 = Theme.colors.text
+			dailyClaimButton.AutoButtonColor = false
+			dailyClaimButton.Active = true
+		else
+			dailyClaimButton.BackgroundColor3 = Theme.colors.buyDim
+			dailyClaimButton.TextColor3 = Theme.colors.muted
+			dailyClaimButton.Active = false
+		end
+	end
+	handle.setDailyClaimEnabled(false)
 
 	handle.dailyRewardFrame = dailyRewardFrame
 	handle.dailyRewardLabel = dailyRewardLabel
 	handle.dailyTimerLabel = dailyTimerLabel
+	handle.dailyClaimButton = dailyClaimButton
 
 	return handle
 end

@@ -11,6 +11,7 @@ local Config = require(Shared.Config)
 local Format = require(Shared.Format)
 local Economy = require(Shared.Economy)
 local Remotes = require(Shared.Remotes)
+local Achievements = require(Shared.Achievements)
 
 local Theme = require(script.Parent:WaitForChild("Theme"))
 local UI = require(script.Parent:WaitForChild("UI"))
@@ -24,9 +25,11 @@ local buyEvent = Remotes.event("BuyBusiness")
 local hireEvent = Remotes.event("HireManager")
 local manualEvent = Remotes.event("ManualCollect")
 local settingsEvent = Remotes.event("UpdateSettings")
+local claimDailyEvent = Remotes.event("ClaimDailyReward")
 local stateUpdate = Remotes.event("StateUpdate")
 local offlineEvent = Remotes.event("OfflineEarnings")
 local notify = Remotes.event("Notify")
+local achievementUnlocked = Remotes.event("AchievementUnlocked")
 local getState = Remotes.func("GetState")
 
 local Players = game:GetService("Players")
@@ -65,18 +68,48 @@ end
 handles.gemAddButton.MouseButton1Click:Connect(function()
 	comingSoon("Gem shop")
 end)
+handles.eventActivateButton.MouseButton1Click:Connect(function()
+	comingSoon("Events")
+end)
+handles.inviteButton.MouseButton1Click:Connect(function()
+	comingSoon("Invite friends")
+end)
 
--- Stub daily-reward countdown. Resets every 24h locally; real implementation
--- will come with the Phase 2 systems pass.
+-- Daily reward: fires the server claim, which validates the 24h cooldown.
+handles.sidebar.onClaimDaily = function()
+	claimDailyEvent:FireServer()
+	Sounds.play("uiClick")
+end
+
+-- Daily reward + bottom event countdowns. Re-evaluated once per second.
 task.spawn(function()
 	while handles.sidebar.dailyTimerLabel.Parent do
 		local now = os.time()
-		-- Next midnight UTC.
-		local secsLeft = 24 * 3600 - (now % (24 * 3600))
-		local h = math.floor(secsLeft / 3600)
-		local m = math.floor((secsLeft % 3600) / 60)
-		local s = secsLeft % 60
-		handles.sidebar.dailyTimerLabel.Text = string.format("%02d:%02d:%02d", h, m, s)
+
+		-- Daily reward: server uses 24h cooldown from dailyClaimedAt.
+		local claimedAt = state.dailyClaimedAt or 0
+		local secsUntilDaily = math.max(0, claimedAt + 24 * 3600 - now)
+		if secsUntilDaily == 0 then
+			handles.sidebar.dailyTimerLabel.Text = "Ready!"
+			handles.sidebar.dailyTimerLabel.TextColor3 = Theme.colors.buyBright
+			handles.sidebar.setDailyClaimEnabled(true)
+		else
+			local h = math.floor(secsUntilDaily / 3600)
+			local m = math.floor((secsUntilDaily % 3600) / 60)
+			local s = secsUntilDaily % 60
+			handles.sidebar.dailyTimerLabel.Text = string.format("%02d:%02d:%02d", h, m, s)
+			handles.sidebar.dailyTimerLabel.TextColor3 = Theme.colors.text
+			handles.sidebar.setDailyClaimEnabled(false)
+		end
+
+		-- Bottom-bar event timer: placeholder 24h rolling countdown until the
+		-- event system ships. Replace with real event state in Phase 2.
+		local eventSecsLeft = 24 * 3600 - (now % (24 * 3600))
+		local eh = math.floor(eventSecsLeft / 3600)
+		local em = math.floor((eventSecsLeft % 3600) / 60)
+		local es = eventSecsLeft % 60
+		handles.eventTimerLabel.Text = string.format("⏰  %02d:%02d:%02d", eh, em, es)
+
 		task.wait(1)
 	end
 end)
@@ -112,17 +145,28 @@ end
 
 -- Local mirror of server state.
 type ClientBusiness = { owned: number, hasManager: boolean, progress: number }
+type ClientAchievement = { unlocked: boolean, unlockedAt: number }
 type ClientState = {
 	money: number,
+	gems: number,
+	prestige: number,
 	totalEarned: number,
+	totalClicks: number,
 	businesses: { [string]: ClientBusiness },
+	achievements: { [string]: ClientAchievement },
+	dailyClaimedAt: number,
 	lastUpdate: number,
 }
 
 local state: ClientState = {
 	money = 0,
+	gems = 0,
+	prestige = 0,
 	totalEarned = 0,
+	totalClicks = 0,
 	businesses = {},
+	achievements = {},
+	dailyClaimedAt = 0,
 	lastUpdate = os.clock(),
 }
 
@@ -195,7 +239,11 @@ end
 local function applySnapshot(snap)
 	if not snap then return end
 	state.money = snap.money or state.money
+	state.gems = snap.gems or state.gems
+	state.prestige = snap.prestige or state.prestige
 	state.totalEarned = snap.totalEarned or state.totalEarned
+	state.totalClicks = snap.totalClicks or state.totalClicks
+	state.dailyClaimedAt = snap.dailyClaimedAt or state.dailyClaimedAt
 	state.lastUpdate = os.clock()
 	for id, b in pairs(snap.businesses or {}) do
 		state.businesses[id] = {
@@ -203,6 +251,14 @@ local function applySnapshot(snap)
 			hasManager = b.hasManager or false,
 			progress = b.progress or 0,
 		}
+	end
+	if type(snap.achievements) == "table" then
+		for id, st in pairs(snap.achievements) do
+			state.achievements[id] = {
+				unlocked = st.unlocked or false,
+				unlockedAt = st.unlockedAt or 0,
+			}
+		end
 	end
 
 	-- Apply persisted audio settings on the very first snapshot.
@@ -223,6 +279,24 @@ local function applySnapshot(snap)
 end
 
 stateUpdate.OnClientEvent:Connect(applySnapshot)
+
+achievementUnlocked.OnClientEvent:Connect(function(payload)
+	if type(payload) ~= "table" or type(payload.ids) ~= "table" then return end
+	-- One banner per unlock, slightly staggered so multi-unlocks don't pile up.
+	for i, id in ipairs(payload.ids) do
+		local def = Achievements.BY_ID[id]
+		if def then
+			task.delay((i - 1) * 0.4, function()
+				Effects.celebrationBanner(
+					handles.screenGui,
+					def.icon .. "  " .. def.name .. " unlocked!",
+					"+" .. tostring(def.gemReward) .. " 💎"
+				)
+				Sounds.play("milestone")
+			end)
+		end
+	end
+end)
 
 notify.OnClientEvent:Connect(function(payload)
 	if type(payload) == "table" and payload.message then
@@ -387,12 +461,48 @@ local function tickMoneyDisplay(dt: number)
 	displayedMoney += (target - displayedMoney) * lerp
 end
 
+local function totalOwnedCount(): number
+	local sum = 0
+	for _, b in pairs(state.businesses) do
+		sum += (b.owned or 0)
+	end
+	return sum
+end
+
 local function refreshUI()
 	handles.moneyLabel.Text = Format.money(displayedMoney)
 	local rps = totalRevenuePerSecond()
 	handles.rpsLabel.Text = if rps > 0
 		then "+" .. Format.money(rps) .. " / sec"
 		else "Tap a business to earn"
+
+	-- Header gem counter + prestige badge.
+	handles.gemLabel.Text = Format.short(state.gems)
+	handles.playerPrestigeLabel.Text = "👑 Prestige " .. tostring(state.prestige)
+
+	-- Achievement progress rows (top 3 visible; full list behind View All).
+	local metrics = {
+		totalEarned = state.totalEarned or 0,
+		totalOwned = totalOwnedCount(),
+		totalClicks = state.totalClicks or 0,
+	}
+	for id, row in pairs(handles.rightPanel.achievementRows) do
+		local def = Achievements.BY_ID[id]
+		if def then
+			local progress = Achievements.progress(def, metrics)
+			row.progressFill.Size = UDim2.fromScale(progress, 1)
+			local already = state.achievements[id] and state.achievements[id].unlocked
+			if already then
+				row.percentLabel.Text = "DONE"
+				row.percentLabel.TextColor3 = Theme.colors.gold
+				row.progressFill.BackgroundColor3 = Theme.colors.gold
+			else
+				row.percentLabel.Text = string.format("%d%%", math.floor(progress * 100))
+				row.percentLabel.TextColor3 = Theme.colors.muted
+				row.progressFill.BackgroundColor3 = Theme.colors.buyAction
+			end
+		end
+	end
 
 	local qty = currentQty()
 	for id, h in pairs(handles.businesses) do

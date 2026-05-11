@@ -55,17 +55,27 @@ export type ProfileSettings = {
 	musicVolume: number,
 }
 
+export type AchievementState = {
+	unlocked: boolean,
+	unlockedAt: number,
+}
+
 export type ProfileData = {
 	version: number,
 	money: number,
+	gems: number,
+	prestige: number,
+	totalClicks: number,
 	businesses: { [string]: { owned: number, hasManager: boolean, progress: number } },
 	settings: ProfileSettings,
-	lastOnline: number, -- os.time()
+	achievements: { [string]: AchievementState },
+	dailyClaimedAt: number, -- os.time() of last claim
+	lastOnline: number,
 	totalEarned: number,
 	createdAt: number,
 }
 
-local CURRENT_VERSION = 2
+local CURRENT_VERSION = 3
 
 local function defaultSettings(): ProfileSettings
 	return { sfxVolume = 1.0, musicVolume = 0.6 }
@@ -75,8 +85,13 @@ local function defaultProfile(): ProfileData
 	return {
 		version = CURRENT_VERSION,
 		money = 0, -- caller seeds with starting money
+		gems = 0,
+		prestige = 0,
+		totalClicks = 0,
 		businesses = {},
 		settings = defaultSettings(),
+		achievements = {},
+		dailyClaimedAt = 0,
 		lastOnline = os.time(),
 		totalEarned = 0,
 		createdAt = os.time(),
@@ -100,6 +115,15 @@ local function migrate(data: any): ProfileData
 	else
 		data.settings.sfxVolume = tonumber(data.settings.sfxVolume) or 1.0
 		data.settings.musicVolume = tonumber(data.settings.musicVolume) or 0.6
+	end
+
+	-- v2 -> v3: add gems, prestige, totalClicks, achievements, dailyClaimedAt.
+	data.gems = tonumber(data.gems) or 0
+	data.prestige = tonumber(data.prestige) or 0
+	data.totalClicks = tonumber(data.totalClicks) or 0
+	data.dailyClaimedAt = tonumber(data.dailyClaimedAt) or 0
+	if type(data.achievements) ~= "table" then
+		data.achievements = {}
 	end
 
 	data.version = CURRENT_VERSION
