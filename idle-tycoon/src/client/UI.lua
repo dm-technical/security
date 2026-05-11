@@ -14,6 +14,7 @@ local Upgrades = require(Shared.Upgrades)
 local Theme = require(script.Parent.Theme)
 local BusinessCard = require(script.Parent.BusinessCard)
 local UpgradeCard = require(script.Parent.UpgradeCard)
+local PrestigePanel = require(script.Parent.PrestigePanel)
 local LeftSidebar = require(script.Parent.LeftSidebar)
 local RightPanel = require(script.Parent.RightPanel)
 
@@ -44,6 +45,7 @@ export type Handles = {
 	rightPanel: RightPanel.Handle,
 	businesses: { [string]: BusinessCard.Handle },
 	upgrades: { [string]: UpgradeCard.Handle },
+	prestigePanel: PrestigePanel.Handle,
 	businessesScroll: ScrollingFrame,
 	upgradesScroll: ScrollingFrame,
 	-- Switches which center panel is visible.
@@ -356,9 +358,25 @@ function UI.build(): Handles
 		upgradeHandles[def.id] = UpgradeCard.build(upgradesScroll, def, i)
 	end
 
+	-- Prestige panel: occupies the same center column area.
+	local prestigeContainer = Instance.new("Frame")
+	prestigeContainer.Name = "PrestigeContainer"
+	prestigeContainer.Position = centerScroll.Position
+	prestigeContainer.Size = centerScroll.Size
+	prestigeContainer.BackgroundTransparency = 1
+	prestigeContainer.Visible = false
+	prestigeContainer.ZIndex = 3
+	prestigeContainer.Parent = root
+	Theme.padding(prestigeContainer, 4)
+
+	local prestigePanel = PrestigePanel.build(prestigeContainer)
+	prestigePanel.frame.Size = UDim2.fromScale(1, 1)
+	prestigePanel.frame.Visible = true
+
 	local function showTab(id: string)
 		centerScroll.Visible = (id == "businesses")
 		upgradesScroll.Visible = (id == "upgrades")
+		prestigeContainer.Visible = (id == "prestige")
 	end
 
 	-- Bottom event bar: Double Cash Event (left) + Invite Friends (right).
@@ -581,6 +599,7 @@ function UI.build(): Handles
 		rightPanel = rightPanel,
 		businesses = businesses,
 		upgrades = upgradeHandles,
+		prestigePanel = prestigePanel,
 		businessesScroll = centerScroll,
 		upgradesScroll = upgradesScroll,
 		showTab = showTab,

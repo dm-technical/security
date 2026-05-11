@@ -14,6 +14,7 @@ local REMOTE_EVENTS = {
 	"HireManager",        -- client -> server: { businessId }
 	"ManualCollect",      -- client -> server: { businessId }
 	"BuyUpgrade",         -- client -> server: { upgradeId }
+	"DoPrestige",         -- client -> server: ()
 	"UpdateSettings",     -- client -> server: { sfxVolume?, musicVolume? }
 	"ClaimDailyReward",   -- client -> server: ()
 	"StateUpdate",        -- server -> client: full or partial state snapshot

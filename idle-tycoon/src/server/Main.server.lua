@@ -18,6 +18,7 @@ local buyEvent = Remotes.event("BuyBusiness")
 local hireEvent = Remotes.event("HireManager")
 local manualEvent = Remotes.event("ManualCollect")
 local buyUpgradeEvent = Remotes.event("BuyUpgrade")
+local doPrestigeEvent = Remotes.event("DoPrestige")
 local settingsEvent = Remotes.event("UpdateSettings")
 local claimDailyEvent = Remotes.event("ClaimDailyReward")
 local stateUpdate = Remotes.event("StateUpdate")
@@ -159,6 +160,23 @@ buyUpgradeEvent.OnServerEvent:Connect(function(player: Player, upgradeId: any)
 		maybeSaveAfterPurchase(player)
 	else
 		notify:FireClient(player, { kind = "error", message = err or "Purchase failed" })
+	end
+end)
+
+doPrestigeEvent.OnServerEvent:Connect(function(player: Player)
+	local profile = DataService.get(player)
+	if not profile then return end
+	local ok, err, newLevel = EconomyService.doPrestige(profile)
+	if ok then
+		pushState(player)
+		notify:FireClient(player, {
+			kind = "info",
+			message = string.format("Prestige %d! All revenue +%d%%", newLevel, newLevel * 20),
+		})
+		-- Persist immediately — prestige is too destructive to leave to autosave.
+		DataService.autosave(player)
+	else
+		notify:FireClient(player, { kind = "error", message = err or "Cannot prestige yet" })
 	end
 end)
 

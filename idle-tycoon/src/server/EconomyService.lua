@@ -7,6 +7,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
 local Economy = require(Shared.Economy)
 local Upgrades = require(Shared.Upgrades)
+local Prestige = require(Shared.Prestige)
 
 local DataService = require(script.Parent.DataService)
 
@@ -42,12 +43,12 @@ function EconomyService.applyOfflineProgress(profile): (number, number)
 		return 0, 0
 	end
 
+	local prestigeMult = Prestige.multiplierFor(profile.prestige or 0)
 	local total = 0
 	for _, def in ipairs(Config.BUSINESSES) do
 		local b = profile.businesses[def.id]
 		if b and b.owned > 0 and b.hasManager then
-			-- Apply purchased upgrade multipliers to offline accrual too.
-			local mult = Upgrades.multiplierFor(profile, def.id)
+			local mult = Upgrades.multiplierFor(profile, def.id) * prestigeMult
 			total += Economy.revenuePerSecond(def, b.owned, mult) * capped
 		end
 	end
@@ -68,7 +69,8 @@ local function tickBusiness(profile, def: Config.BusinessDef, dt: number): numbe
 	local b = profile.businesses[def.id]
 	if not b or b.owned <= 0 then return 0 end
 
-	local baseMult = Upgrades.multiplierFor(profile, def.id)
+	local prestigeMult = Prestige.multiplierFor(profile.prestige or 0)
+	local baseMult = Upgrades.multiplierFor(profile, def.id) * prestigeMult
 	local clickMult = Upgrades.clickMultiplier(profile)
 
 	local payout = 0
@@ -159,6 +161,34 @@ function EconomyService.manualCollect(profile, businessId: string): boolean
 	return true
 end
 
+-- Perform a prestige: hard-reset run-state (money, businesses, upgrades) in
+-- exchange for a permanent +20% global revenue multiplier per level.
+-- Preserves achievements, gems, lifetime totalEarned/totalClicks.
+function EconomyService.doPrestige(profile): (boolean, string?, number)
+	if not Prestige.canPrestige(profile) then
+		return false, "Not enough earnings this run", 0
+	end
+
+	-- Snapshot the level we're about to advance to so we can tell the caller.
+	local newLevel = (profile.prestige or 0) + 1
+
+	-- Lock the high-water mark so future prestiges measure earnings since now.
+	profile.totalEarnedAtLastPrestige = profile.totalEarned or 0
+
+	-- Run-state reset.
+	profile.money = Config.STARTING_MONEY
+	profile.businesses = {}
+	profile.upgrades = {}
+	for _, def in ipairs(Config.BUSINESSES) do
+		profile.businesses[def.id] = { owned = 0, hasManager = false, progress = 0 }
+	end
+
+	-- Permanent gains.
+	profile.prestige = newLevel
+
+	return true, nil, newLevel
+end
+
 -- Buy a one-time upgrade. Server is authoritative on cost + unlock checks.
 -- Returns (success, errorMessage).
 function EconomyService.buyUpgrade(profile, upgradeId: string): (boolean, string?)
@@ -198,6 +228,7 @@ function EconomyService.snapshot(profile)
 		gems = profile.gems or 0,
 		prestige = profile.prestige or 0,
 		totalEarned = profile.totalEarned,
+		totalEarnedAtLastPrestige = profile.totalEarnedAtLastPrestige or 0,
 		totalClicks = profile.totalClicks or 0,
 		businesses = biz,
 		achievements = ach,

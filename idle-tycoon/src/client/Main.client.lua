@@ -13,6 +13,7 @@ local Economy = require(Shared.Economy)
 local Remotes = require(Shared.Remotes)
 local Achievements = require(Shared.Achievements)
 local Upgrades = require(Shared.Upgrades)
+local Prestige = require(Shared.Prestige)
 
 local Theme = require(script.Parent:WaitForChild("Theme"))
 local UI = require(script.Parent:WaitForChild("UI"))
@@ -26,6 +27,7 @@ local buyEvent = Remotes.event("BuyBusiness")
 local hireEvent = Remotes.event("HireManager")
 local manualEvent = Remotes.event("ManualCollect")
 local buyUpgradeEvent = Remotes.event("BuyUpgrade")
+local doPrestigeEvent = Remotes.event("DoPrestige")
 local settingsEvent = Remotes.event("UpdateSettings")
 local claimDailyEvent = Remotes.event("ClaimDailyReward")
 local stateUpdate = Remotes.event("StateUpdate")
@@ -50,6 +52,7 @@ type ClientState = {
 	gems: number,
 	prestige: number,
 	totalEarned: number,
+	totalEarnedAtLastPrestige: number,
 	totalClicks: number,
 	businesses: { [string]: ClientBusiness },
 	achievements: { [string]: ClientAchievement },
@@ -63,6 +66,7 @@ local state: ClientState = {
 	gems = 0,
 	prestige = 0,
 	totalEarned = 0,
+	totalEarnedAtLastPrestige = 0,
 	totalClicks = 0,
 	businesses = {},
 	achievements = {},
@@ -98,6 +102,37 @@ handles.sidebar.onTab = function(id: string, enabled: boolean)
 end
 -- Show businesses by default.
 handles.showTab("businesses")
+
+-- Wire the big PRESTIGE button. Two-click confirmation: first click swaps
+-- the label to "TAP AGAIN TO CONFIRM" for 4 seconds, second click within
+-- that window fires the server.
+local prestigeConfirmAt = 0
+local PRESTIGE_BUTTON_DEFAULT_TEXT = handles.prestigePanel.prestigeButton.Text
+Effects.bindPressFeel(handles.prestigePanel.prestigeButton)
+handles.prestigePanel.prestigeButton.MouseButton1Click:Connect(function()
+	if not handles.prestigePanel.prestigeButton.Active then
+		Sounds.play("purchaseFail")
+		return
+	end
+	local now = os.clock()
+	if now - prestigeConfirmAt < 4 then
+		-- Confirmation: fire it.
+		doPrestigeEvent:FireServer()
+		prestigeConfirmAt = 0
+		handles.prestigePanel.prestigeButton.Text = PRESTIGE_BUTTON_DEFAULT_TEXT
+		Sounds.play("milestone")
+	else
+		-- First press: arm confirmation.
+		prestigeConfirmAt = now
+		handles.prestigePanel.prestigeButton.Text = "TAP AGAIN TO CONFIRM"
+		Sounds.play("uiClick")
+		task.delay(4, function()
+			if os.clock() - prestigeConfirmAt >= 4 then
+				handles.prestigePanel.prestigeButton.Text = PRESTIGE_BUTTON_DEFAULT_TEXT
+			end
+		end)
+	end
+end)
 
 -- Wire BUY button on every upgrade row.
 for id, h in pairs(handles.upgrades) do
@@ -264,6 +299,7 @@ local function applySnapshot(snap)
 	state.gems = snap.gems or state.gems
 	state.prestige = snap.prestige or state.prestige
 	state.totalEarned = snap.totalEarned or state.totalEarned
+	state.totalEarnedAtLastPrestige = snap.totalEarnedAtLastPrestige or state.totalEarnedAtLastPrestige
 	state.totalClicks = snap.totalClicks or state.totalClicks
 	state.dailyClaimedAt = snap.dailyClaimedAt or state.dailyClaimedAt
 	state.lastUpdate = os.clock()
@@ -274,7 +310,10 @@ local function applySnapshot(snap)
 			progress = b.progress or 0,
 		}
 	end
+	-- Replace (not merge) — server sends authoritative full state, and
+	-- prestige clears these tables to {} which a merge would silently miss.
 	if type(snap.achievements) == "table" then
+		state.achievements = {}
 		for id, st in pairs(snap.achievements) do
 			state.achievements[id] = {
 				unlocked = st.unlocked or false,
@@ -283,6 +322,7 @@ local function applySnapshot(snap)
 		end
 	end
 	if type(snap.upgrades) == "table" then
+		state.upgrades = {}
 		for id, st in pairs(snap.upgrades) do
 			state.upgrades[id] = {
 				purchased = st.purchased or false,
@@ -365,11 +405,12 @@ end)
 
 local function advanceLocal(dt: number)
 	local clickMult = Upgrades.clickMultiplier(state)
+	local prestigeMult = Prestige.multiplierFor(state.prestige or 0)
 	for id, b in pairs(state.businesses) do
 		if b.owned > 0 then
 			local def = Config.BUSINESS_BY_ID[id]
 			if def then
-				local mult = Upgrades.multiplierFor(state, id)
+				local mult = Upgrades.multiplierFor(state, id) * prestigeMult
 				if b.hasManager then
 					b.progress += dt
 					while b.progress >= def.cycleTime do
@@ -469,11 +510,13 @@ end
 
 local function totalRevenuePerSecond(): number
 	local total = 0
+	local prestigeMult = Prestige.multiplierFor(state.prestige or 0)
 	for id, b in pairs(state.businesses) do
 		if b.owned > 0 and b.hasManager then
 			local def = Config.BUSINESS_BY_ID[id]
 			if def then
-				total += Economy.revenuePerSecond(def, b.owned, Upgrades.multiplierFor(state, id))
+				local mult = Upgrades.multiplierFor(state, id) * prestigeMult
+				total += Economy.revenuePerSecond(def, b.owned, mult)
 			end
 		end
 	end
@@ -562,9 +605,9 @@ local function refreshUI()
 			h.progressFill.Size = UDim2.fromScale(0, 1)
 		end
 
-		-- Apply purchased-upgrade multiplier to the displayed numbers so the
-		-- card matches what the server actually pays out.
-		local upgradeMult = Upgrades.multiplierFor(state, id)
+		-- Combined multiplier (upgrades + prestige) so the card matches what
+		-- the server actually pays out per cycle.
+		local upgradeMult = Upgrades.multiplierFor(state, id) * Prestige.multiplierFor(state.prestige or 0)
 
 		-- Cycle-payout label (now lives to the right of the bar).
 		if b.owned > 0 then
@@ -637,6 +680,15 @@ local function refreshUI()
 		else
 			h.setState("available", canAfford)
 		end
+	end
+
+	-- Prestige panel: level, earned-this-run progress, eligibility.
+	do
+		local level = state.prestige or 0
+		local earned = Prestige.earnedThisRun(state)
+		local req = Prestige.requirementFor(level)
+		local can = Prestige.canPrestige(state)
+		handles.prestigePanel.setState(level, earned, req, can)
 	end
 end
 

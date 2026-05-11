@@ -18,7 +18,7 @@ export type NavTab = {
 local TABS: { NavTab } = {
 	{ id = "businesses",  label = "Businesses",   icon = "🏪", enabled = true  },
 	{ id = "upgrades",    label = "Upgrades",     icon = "📈", enabled = true  },
-	{ id = "prestige",    label = "Prestige",     icon = "👑", enabled = false },
+	{ id = "prestige",    label = "Prestige",     icon = "👑", enabled = true  },
 	{ id = "achievements",label = "Achievements", icon = "🏆", enabled = false },
 	{ id = "shop",        label = "Shop",         icon = "🛒", enabled = false },
 	{ id = "boosts",      label = "Boosts",       icon = "⚡", enabled = false },

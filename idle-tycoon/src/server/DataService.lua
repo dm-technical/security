@@ -76,12 +76,13 @@ export type ProfileData = {
 	achievements: { [string]: AchievementState },
 	upgrades: { [string]: UpgradeState },
 	dailyClaimedAt: number, -- os.time() of last claim
+	totalEarnedAtLastPrestige: number,
 	lastOnline: number,
 	totalEarned: number,
 	createdAt: number,
 }
 
-local CURRENT_VERSION = 4
+local CURRENT_VERSION = 5
 
 local function defaultSettings(): ProfileSettings
 	return { sfxVolume = 1.0, musicVolume = 0.6 }
@@ -99,6 +100,7 @@ local function defaultProfile(): ProfileData
 		achievements = {},
 		upgrades = {},
 		dailyClaimedAt = 0,
+		totalEarnedAtLastPrestige = 0,
 		lastOnline = os.time(),
 		totalEarned = 0,
 		createdAt = os.time(),
@@ -136,6 +138,14 @@ local function migrate(data: any): ProfileData
 	-- v3 -> v4: add upgrades.
 	if type(data.upgrades) ~= "table" then
 		data.upgrades = {}
+	end
+
+	-- v4 -> v5: add totalEarnedAtLastPrestige. Default to current totalEarned
+	-- so existing players don't get a "free prestige" they didn't earn this run.
+	if data.totalEarnedAtLastPrestige == nil then
+		data.totalEarnedAtLastPrestige = data.totalEarned or 0
+	else
+		data.totalEarnedAtLastPrestige = tonumber(data.totalEarnedAtLastPrestige) or 0
 	end
 
 	data.version = CURRENT_VERSION
