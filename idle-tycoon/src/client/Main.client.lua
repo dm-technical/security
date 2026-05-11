@@ -37,6 +37,35 @@ local Players = game:GetService("Players")
 local handles = UI.build()
 local settingsPanel = Settings.build(handles.screenGui)
 
+-- Local mirror of server state. Declared early so the closures below (daily
+-- reward countdown, snapshot handler, render loop) all capture the same
+-- upvalue. Server data populates it via applySnapshot.
+type ClientBusiness = { owned: number, hasManager: boolean, progress: number }
+type ClientAchievement = { unlocked: boolean, unlockedAt: number }
+type ClientState = {
+	money: number,
+	gems: number,
+	prestige: number,
+	totalEarned: number,
+	totalClicks: number,
+	businesses: { [string]: ClientBusiness },
+	achievements: { [string]: ClientAchievement },
+	dailyClaimedAt: number,
+	lastUpdate: number,
+}
+
+local state: ClientState = {
+	money = 0,
+	gems = 0,
+	prestige = 0,
+	totalEarned = 0,
+	totalClicks = 0,
+	businesses = {},
+	achievements = {},
+	dailyClaimedAt = 0,
+	lastUpdate = os.clock(),
+}
+
 -- Pre-populate the player card with the local player's display name.
 handles.playerNameLabel.Text = Players.LocalPlayer.DisplayName
 
@@ -142,33 +171,6 @@ for id, h in pairs(handles.businesses) do
 	buyPulses[id] = Effects.affordancePulse(h.buyButton)
 	managerPulses[id] = Effects.affordancePulse(h.managerButton)
 end
-
--- Local mirror of server state.
-type ClientBusiness = { owned: number, hasManager: boolean, progress: number }
-type ClientAchievement = { unlocked: boolean, unlockedAt: number }
-type ClientState = {
-	money: number,
-	gems: number,
-	prestige: number,
-	totalEarned: number,
-	totalClicks: number,
-	businesses: { [string]: ClientBusiness },
-	achievements: { [string]: ClientAchievement },
-	dailyClaimedAt: number,
-	lastUpdate: number,
-}
-
-local state: ClientState = {
-	money = 0,
-	gems = 0,
-	prestige = 0,
-	totalEarned = 0,
-	totalClicks = 0,
-	businesses = {},
-	achievements = {},
-	dailyClaimedAt = 0,
-	lastUpdate = os.clock(),
-}
 
 -- Detection state -----------------------------------------------------------
 -- Tracking previous-frame values lets us emit one-shot effects on edges
