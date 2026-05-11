@@ -9,8 +9,11 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
 
+local Upgrades = require(Shared.Upgrades)
+
 local Theme = require(script.Parent.Theme)
 local BusinessCard = require(script.Parent.BusinessCard)
+local UpgradeCard = require(script.Parent.UpgradeCard)
 local LeftSidebar = require(script.Parent.LeftSidebar)
 local RightPanel = require(script.Parent.RightPanel)
 
@@ -40,6 +43,11 @@ export type Handles = {
 	sidebar: LeftSidebar.Handle,
 	rightPanel: RightPanel.Handle,
 	businesses: { [string]: BusinessCard.Handle },
+	upgrades: { [string]: UpgradeCard.Handle },
+	businessesScroll: ScrollingFrame,
+	upgradesScroll: ScrollingFrame,
+	-- Switches which center panel is visible.
+	showTab: (id: string) -> (),
 	-- Notifications + popups
 	notifyContainer: Frame,
 	offlinePopup: Frame,
@@ -322,6 +330,37 @@ function UI.build(): Handles
 		businesses[def.id] = BusinessCard.build(centerScroll, def, i)
 	end
 
+	-- Sibling scroll for upgrades; hidden until the Upgrades tab is active.
+	local upgradesScroll = Instance.new("ScrollingFrame")
+	upgradesScroll.Name = "Upgrades"
+	upgradesScroll.Position = centerScroll.Position
+	upgradesScroll.Size = centerScroll.Size
+	upgradesScroll.BackgroundTransparency = 1
+	upgradesScroll.BorderSizePixel = 0
+	upgradesScroll.ScrollBarThickness = 6
+	upgradesScroll.ScrollBarImageColor3 = Theme.colors.panelHi
+	upgradesScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	upgradesScroll.CanvasSize = UDim2.new()
+	upgradesScroll.ZIndex = 3
+	upgradesScroll.Visible = false
+	upgradesScroll.Parent = root
+	Theme.padding(upgradesScroll, 4)
+
+	local upLayout = Instance.new("UIListLayout")
+	upLayout.Padding = UDim.new(0, 10)
+	upLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	upLayout.Parent = upgradesScroll
+
+	local upgradeHandles: { [string]: UpgradeCard.Handle } = {}
+	for i, def in ipairs(Upgrades.DEFINITIONS) do
+		upgradeHandles[def.id] = UpgradeCard.build(upgradesScroll, def, i)
+	end
+
+	local function showTab(id: string)
+		centerScroll.Visible = (id == "businesses")
+		upgradesScroll.Visible = (id == "upgrades")
+	end
+
 	-- Bottom event bar: Double Cash Event (left) + Invite Friends (right).
 	local bottomBar = Instance.new("Frame")
 	bottomBar.Name = "BottomBar"
@@ -541,6 +580,10 @@ function UI.build(): Handles
 		sidebar = sidebar,
 		rightPanel = rightPanel,
 		businesses = businesses,
+		upgrades = upgradeHandles,
+		businessesScroll = centerScroll,
+		upgradesScroll = upgradesScroll,
+		showTab = showTab,
 		notifyContainer = notifyContainer,
 		offlinePopup = offlinePopup,
 		offlineAmountLabel = offlineAmountLabel,

@@ -60,6 +60,11 @@ export type AchievementState = {
 	unlockedAt: number,
 }
 
+export type UpgradeState = {
+	purchased: boolean,
+	purchasedAt: number,
+}
+
 export type ProfileData = {
 	version: number,
 	money: number,
@@ -69,13 +74,14 @@ export type ProfileData = {
 	businesses: { [string]: { owned: number, hasManager: boolean, progress: number } },
 	settings: ProfileSettings,
 	achievements: { [string]: AchievementState },
+	upgrades: { [string]: UpgradeState },
 	dailyClaimedAt: number, -- os.time() of last claim
 	lastOnline: number,
 	totalEarned: number,
 	createdAt: number,
 }
 
-local CURRENT_VERSION = 3
+local CURRENT_VERSION = 4
 
 local function defaultSettings(): ProfileSettings
 	return { sfxVolume = 1.0, musicVolume = 0.6 }
@@ -91,6 +97,7 @@ local function defaultProfile(): ProfileData
 		businesses = {},
 		settings = defaultSettings(),
 		achievements = {},
+		upgrades = {},
 		dailyClaimedAt = 0,
 		lastOnline = os.time(),
 		totalEarned = 0,
@@ -124,6 +131,11 @@ local function migrate(data: any): ProfileData
 	data.dailyClaimedAt = tonumber(data.dailyClaimedAt) or 0
 	if type(data.achievements) ~= "table" then
 		data.achievements = {}
+	end
+
+	-- v3 -> v4: add upgrades.
+	if type(data.upgrades) ~= "table" then
+		data.upgrades = {}
 	end
 
 	data.version = CURRENT_VERSION

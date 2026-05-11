@@ -17,6 +17,7 @@ local AchievementsService = require(script.Parent.AchievementsService)
 local buyEvent = Remotes.event("BuyBusiness")
 local hireEvent = Remotes.event("HireManager")
 local manualEvent = Remotes.event("ManualCollect")
+local buyUpgradeEvent = Remotes.event("BuyUpgrade")
 local settingsEvent = Remotes.event("UpdateSettings")
 local claimDailyEvent = Remotes.event("ClaimDailyReward")
 local stateUpdate = Remotes.event("StateUpdate")
@@ -146,6 +147,19 @@ settingsEvent.OnServerEvent:Connect(function(player: Player, payload: any)
 	local profile = DataService.get(player)
 	if not profile then return end
 	EconomyService.updateSettings(profile, payload)
+end)
+
+buyUpgradeEvent.OnServerEvent:Connect(function(player: Player, upgradeId: any)
+	if type(upgradeId) ~= "string" then return end
+	local profile = DataService.get(player)
+	if not profile then return end
+	local ok, err = EconomyService.buyUpgrade(profile, upgradeId)
+	if ok then
+		pushState(player)
+		maybeSaveAfterPurchase(player)
+	else
+		notify:FireClient(player, { kind = "error", message = err or "Purchase failed" })
+	end
 end)
 
 -- Daily reward stub: 24-hour cooldown, grants 25 gems on claim.

@@ -12,6 +12,7 @@ local Format = require(Shared.Format)
 local Economy = require(Shared.Economy)
 local Remotes = require(Shared.Remotes)
 local Achievements = require(Shared.Achievements)
+local Upgrades = require(Shared.Upgrades)
 
 local Theme = require(script.Parent:WaitForChild("Theme"))
 local UI = require(script.Parent:WaitForChild("UI"))
@@ -24,6 +25,7 @@ local Background = require(script.Parent:WaitForChild("Background"))
 local buyEvent = Remotes.event("BuyBusiness")
 local hireEvent = Remotes.event("HireManager")
 local manualEvent = Remotes.event("ManualCollect")
+local buyUpgradeEvent = Remotes.event("BuyUpgrade")
 local settingsEvent = Remotes.event("UpdateSettings")
 local claimDailyEvent = Remotes.event("ClaimDailyReward")
 local stateUpdate = Remotes.event("StateUpdate")
@@ -42,6 +44,7 @@ local settingsPanel = Settings.build(handles.screenGui)
 -- upvalue. Server data populates it via applySnapshot.
 type ClientBusiness = { owned: number, hasManager: boolean, progress: number }
 type ClientAchievement = { unlocked: boolean, unlockedAt: number }
+type ClientUpgrade = { purchased: boolean, purchasedAt: number }
 type ClientState = {
 	money: number,
 	gems: number,
@@ -50,6 +53,7 @@ type ClientState = {
 	totalClicks: number,
 	businesses: { [string]: ClientBusiness },
 	achievements: { [string]: ClientAchievement },
+	upgrades: { [string]: ClientUpgrade },
 	dailyClaimedAt: number,
 	lastUpdate: number,
 }
@@ -62,6 +66,7 @@ local state: ClientState = {
 	totalClicks = 0,
 	businesses = {},
 	achievements = {},
+	upgrades = {},
 	dailyClaimedAt = 0,
 	lastUpdate = os.clock(),
 }
@@ -81,12 +86,27 @@ local function comingSoon(label: string)
 	Sounds.play("uiClick")
 end
 
--- Wire stubbed interactions.
+-- Wire sidebar tab clicks. Businesses + Upgrades are real tabs; the rest
+-- toast "coming soon" until their content panels exist.
 handles.sidebar.onTab = function(id: string, enabled: boolean)
 	Sounds.play("uiClick")
-	if not enabled then
+	if enabled and (id == "businesses" or id == "upgrades") then
+		handles.showTab(id)
+	elseif not enabled then
 		comingSoon(id:sub(1, 1):upper() .. id:sub(2))
 	end
+end
+-- Show businesses by default.
+handles.showTab("businesses")
+
+-- Wire BUY button on every upgrade row.
+for id, h in pairs(handles.upgrades) do
+	h.buyButton.MouseButton1Click:Connect(function()
+		if not h.buyButton.Active then return end
+		buyUpgradeEvent:FireServer(id)
+		Sounds.play("uiClick")
+	end)
+	Effects.bindPressFeel(h.buyButton)
 end
 handles.rightPanel.onBoostClick = function(id: string)
 	comingSoon("Boosts")
@@ -262,6 +282,14 @@ local function applySnapshot(snap)
 			}
 		end
 	end
+	if type(snap.upgrades) == "table" then
+		for id, st in pairs(snap.upgrades) do
+			state.upgrades[id] = {
+				purchased = st.purchased or false,
+				purchasedAt = st.purchasedAt or 0,
+			}
+		end
+	end
 
 	-- Apply persisted audio settings on the very first snapshot.
 	if not settingsApplied and type(snap.settings) == "table" then
@@ -336,22 +364,24 @@ end)
 -- Local extrapolation + edge detection -------------------------------------
 
 local function advanceLocal(dt: number)
+	local clickMult = Upgrades.clickMultiplier(state)
 	for id, b in pairs(state.businesses) do
 		if b.owned > 0 then
 			local def = Config.BUSINESS_BY_ID[id]
 			if def then
+				local mult = Upgrades.multiplierFor(state, id)
 				if b.hasManager then
 					b.progress += dt
 					while b.progress >= def.cycleTime do
 						b.progress -= def.cycleTime
 						-- Optimistic credit; server snapshot is source of truth.
-						state.money += Economy.cyclePayout(def, b.owned, 1)
+						state.money += Economy.cyclePayout(def, b.owned, mult)
 					end
 				elseif b.progress > 0 then
 					b.progress = math.min(def.cycleTime, b.progress + dt)
 					if b.progress >= def.cycleTime then
-						-- Manual cycle just completed locally.
-						state.money += Economy.cyclePayout(def, b.owned, 1)
+						-- Manual cycles also get the click power multiplier.
+						state.money += Economy.cyclePayout(def, b.owned, mult * clickMult)
 						b.progress = 0
 					end
 				end
@@ -443,7 +473,7 @@ local function totalRevenuePerSecond(): number
 		if b.owned > 0 and b.hasManager then
 			local def = Config.BUSINESS_BY_ID[id]
 			if def then
-				total += Economy.revenuePerSecond(def, b.owned, 1)
+				total += Economy.revenuePerSecond(def, b.owned, Upgrades.multiplierFor(state, id))
 			end
 		end
 	end
@@ -532,16 +562,20 @@ local function refreshUI()
 			h.progressFill.Size = UDim2.fromScale(0, 1)
 		end
 
+		-- Apply purchased-upgrade multiplier to the displayed numbers so the
+		-- card matches what the server actually pays out.
+		local upgradeMult = Upgrades.multiplierFor(state, id)
+
 		-- Cycle-payout label (now lives to the right of the bar).
 		if b.owned > 0 then
-			h.progressLabel.Text = Format.money(Economy.cyclePayout(def, b.owned, 1))
+			h.progressLabel.Text = Format.money(Economy.cyclePayout(def, b.owned, upgradeMult))
 		else
 			h.progressLabel.Text = ""
 		end
 
 		-- "$X / sec" subtitle matching the mockup.
 		if b.owned > 0 then
-			h.revenueLabel.Text = Format.money(Economy.revenuePerSecond(def, b.owned, 1)) .. " / sec"
+			h.revenueLabel.Text = Format.money(Economy.revenuePerSecond(def, b.owned, upgradeMult)) .. " / sec"
 		else
 			h.revenueLabel.Text = "Tap to earn your first dollar"
 		end
@@ -585,6 +619,23 @@ local function refreshUI()
 			h.managerButton.BackgroundColor3 = canHire and Theme.colors.manager or Theme.colors.panelAlt
 			h.managerButton.BackgroundTransparency = canHire and 0 or 0.3
 			managerPulses[id].enabled = canHire
+		end
+	end
+
+	-- Upgrade rows: locked / available / owned + cost + affordability.
+	for id, h in pairs(handles.upgrades) do
+		local def = h.def
+		local owned = Upgrades.isPurchased(state, id)
+		local unlocked = Upgrades.unlocked(state, def)
+		local canAfford = state.money >= def.cost
+
+		h.buyLabel.Text = Format.money(def.cost)
+		if owned then
+			h.setState("owned", false)
+		elseif not unlocked then
+			h.setState("locked", false)
+		else
+			h.setState("available", canAfford)
 		end
 	end
 end

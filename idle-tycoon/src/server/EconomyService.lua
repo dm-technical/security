@@ -6,6 +6,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
 local Economy = require(Shared.Economy)
+local Upgrades = require(Shared.Upgrades)
 
 local DataService = require(script.Parent.DataService)
 
@@ -45,7 +46,9 @@ function EconomyService.applyOfflineProgress(profile): (number, number)
 	for _, def in ipairs(Config.BUSINESSES) do
 		local b = profile.businesses[def.id]
 		if b and b.owned > 0 and b.hasManager then
-			total += Economy.revenuePerSecond(def, b.owned, 1) * capped
+			-- Apply purchased upgrade multipliers to offline accrual too.
+			local mult = Upgrades.multiplierFor(profile, def.id)
+			total += Economy.revenuePerSecond(def, b.owned, mult) * capped
 		end
 	end
 	total *= Config.OFFLINE_EARN_RATE
@@ -60,25 +63,28 @@ end
 -- Tick a single business by `dt` seconds.
 -- For managed businesses we accumulate progress and pay out completed cycles.
 -- For unmanaged businesses, progress only advances if a manual cycle is active.
+-- Multiplier comes from purchased upgrades; click multiplier stacks on manual cycles.
 local function tickBusiness(profile, def: Config.BusinessDef, dt: number): number
 	local b = profile.businesses[def.id]
 	if not b or b.owned <= 0 then return 0 end
+
+	local baseMult = Upgrades.multiplierFor(profile, def.id)
+	local clickMult = Upgrades.clickMultiplier(profile)
 
 	local payout = 0
 	if b.hasManager then
 		b.progress += dt
 		while b.progress >= def.cycleTime do
 			b.progress -= def.cycleTime
-			local cycle = Economy.cyclePayout(def, b.owned, 1)
-			payout += cycle
+			payout += Economy.cyclePayout(def, b.owned, baseMult)
 		end
 	else
-		-- Manual mode: progress is set by ManualCollect; advance it but don't loop.
 		if b.progress > 0 and b.progress < def.cycleTime then
 			b.progress = math.min(def.cycleTime, b.progress + dt)
 			if b.progress >= def.cycleTime then
 				b.progress = 0
-				payout = Economy.cyclePayout(def, b.owned, 1)
+				-- Manual cycles get the click multiplier on top.
+				payout = Economy.cyclePayout(def, b.owned, baseMult * clickMult)
 			end
 		end
 	end
@@ -153,16 +159,39 @@ function EconomyService.manualCollect(profile, businessId: string): boolean
 	return true
 end
 
+-- Buy a one-time upgrade. Server is authoritative on cost + unlock checks.
+-- Returns (success, errorMessage).
+function EconomyService.buyUpgrade(profile, upgradeId: string): (boolean, string?)
+	local def = Upgrades.BY_ID[upgradeId]
+	if not def then return false, "Unknown upgrade" end
+	if Upgrades.isPurchased(profile, upgradeId) then
+		return false, "Already purchased"
+	end
+	if not Upgrades.unlocked(profile, def) then
+		return false, "Not unlocked yet"
+	end
+	if profile.money < def.cost then
+		return false, "Not enough money"
+	end
+	profile.money -= def.cost
+	profile.upgrades = profile.upgrades or {}
+	profile.upgrades[upgradeId] = { purchased = true, purchasedAt = os.time() }
+	return true, nil
+end
+
 -- Build a compact snapshot for replication to a single client.
 function EconomyService.snapshot(profile)
 	local biz = {}
 	for id, b in pairs(profile.businesses) do
 		biz[id] = { owned = b.owned, hasManager = b.hasManager, progress = b.progress }
 	end
-	-- Copy achievement state (small map; cheap to send).
 	local ach = {}
 	for id, state in pairs(profile.achievements or {}) do
 		ach[id] = { unlocked = state.unlocked, unlockedAt = state.unlockedAt }
+	end
+	local ups = {}
+	for id, state in pairs(profile.upgrades or {}) do
+		ups[id] = { purchased = state.purchased, purchasedAt = state.purchasedAt }
 	end
 	return {
 		money = profile.money,
@@ -172,6 +201,7 @@ function EconomyService.snapshot(profile)
 		totalClicks = profile.totalClicks or 0,
 		businesses = biz,
 		achievements = ach,
+		upgrades = ups,
 		dailyClaimedAt = profile.dailyClaimedAt or 0,
 		settings = {
 			sfxVolume = profile.settings.sfxVolume,
