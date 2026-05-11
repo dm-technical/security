@@ -14,6 +14,7 @@ local Remotes = require(Shared.Remotes)
 local Achievements = require(Shared.Achievements)
 local Upgrades = require(Shared.Upgrades)
 local Prestige = require(Shared.Prestige)
+local Boosts = require(Shared.Boosts)
 
 local Theme = require(script.Parent:WaitForChild("Theme"))
 local UI = require(script.Parent:WaitForChild("UI"))
@@ -28,6 +29,7 @@ local hireEvent = Remotes.event("HireManager")
 local manualEvent = Remotes.event("ManualCollect")
 local buyUpgradeEvent = Remotes.event("BuyUpgrade")
 local doPrestigeEvent = Remotes.event("DoPrestige")
+local activateBoostEvent = Remotes.event("ActivateBoost")
 local settingsEvent = Remotes.event("UpdateSettings")
 local claimDailyEvent = Remotes.event("ClaimDailyReward")
 local stateUpdate = Remotes.event("StateUpdate")
@@ -47,6 +49,7 @@ local settingsPanel = Settings.build(handles.screenGui)
 type ClientBusiness = { owned: number, hasManager: boolean, progress: number }
 type ClientAchievement = { unlocked: boolean, unlockedAt: number }
 type ClientUpgrade = { purchased: boolean, purchasedAt: number }
+type ClientBoost = { activeUntil: number, cooldownUntil: number }
 type ClientState = {
 	money: number,
 	gems: number,
@@ -57,6 +60,7 @@ type ClientState = {
 	businesses: { [string]: ClientBusiness },
 	achievements: { [string]: ClientAchievement },
 	upgrades: { [string]: ClientUpgrade },
+	boosts: { [string]: ClientBoost },
 	dailyClaimedAt: number,
 	lastUpdate: number,
 }
@@ -71,6 +75,7 @@ local state: ClientState = {
 	businesses = {},
 	achievements = {},
 	upgrades = {},
+	boosts = {},
 	dailyClaimedAt = 0,
 	lastUpdate = os.clock(),
 }
@@ -90,13 +95,13 @@ local function comingSoon(label: string)
 	Sounds.play("uiClick")
 end
 
--- Wire sidebar tab clicks. Businesses + Upgrades are real tabs; the rest
--- toast "coming soon" until their content panels exist.
+-- Wire sidebar tab clicks. Enabled tabs (Businesses / Upgrades / Prestige)
+-- route through showTab; disabled tabs toast "coming soon".
 handles.sidebar.onTab = function(id: string, enabled: boolean)
 	Sounds.play("uiClick")
-	if enabled and (id == "businesses" or id == "upgrades") then
+	if enabled then
 		handles.showTab(id)
-	elseif not enabled then
+	else
 		comingSoon(id:sub(1, 1):upper() .. id:sub(2))
 	end
 end
@@ -144,7 +149,13 @@ for id, h in pairs(handles.upgrades) do
 	Effects.bindPressFeel(h.buyButton)
 end
 handles.rightPanel.onBoostClick = function(id: string)
-	comingSoon("Boosts")
+	-- Local cooldown guard so spam-clicks don't flood the server.
+	if state.boosts[id] and state.boosts[id].cooldownUntil > os.time() then
+		Sounds.play("purchaseFail")
+		return
+	end
+	activateBoostEvent:FireServer(id)
+	Sounds.play("milestone")
 end
 handles.rightPanel.onViewAllClick = function()
 	comingSoon("Achievements")
@@ -330,6 +341,15 @@ local function applySnapshot(snap)
 			}
 		end
 	end
+	if type(snap.boosts) == "table" then
+		state.boosts = {}
+		for id, st in pairs(snap.boosts) do
+			state.boosts[id] = {
+				activeUntil = st.activeUntil or 0,
+				cooldownUntil = st.cooldownUntil or 0,
+			}
+		end
+	end
 
 	-- Apply persisted audio settings on the very first snapshot.
 	if not settingsApplied and type(snap.settings) == "table" then
@@ -406,23 +426,23 @@ end)
 local function advanceLocal(dt: number)
 	local clickMult = Upgrades.clickMultiplier(state)
 	local prestigeMult = Prestige.multiplierFor(state.prestige or 0)
+	local boostMult = Boosts.activeMultipliers(state)
 	for id, b in pairs(state.businesses) do
 		if b.owned > 0 then
 			local def = Config.BUSINESS_BY_ID[id]
 			if def then
-				local mult = Upgrades.multiplierFor(state, id) * prestigeMult
+				-- Same composition as server-side tickBusiness.
+				local mult = Upgrades.multiplierFor(state, id) * prestigeMult * boostMult.passive
 				if b.hasManager then
 					b.progress += dt
 					while b.progress >= def.cycleTime do
 						b.progress -= def.cycleTime
-						-- Optimistic credit; server snapshot is source of truth.
 						state.money += Economy.cyclePayout(def, b.owned, mult)
 					end
 				elseif b.progress > 0 then
 					b.progress = math.min(def.cycleTime, b.progress + dt)
 					if b.progress >= def.cycleTime then
-						-- Manual cycles also get the click power multiplier.
-						state.money += Economy.cyclePayout(def, b.owned, mult * clickMult)
+						state.money += Economy.cyclePayout(def, b.owned, mult * clickMult * boostMult.manual)
 						b.progress = 0
 					end
 				end
@@ -511,11 +531,12 @@ end
 local function totalRevenuePerSecond(): number
 	local total = 0
 	local prestigeMult = Prestige.multiplierFor(state.prestige or 0)
+	local boostMult = Boosts.activeMultipliers(state)
 	for id, b in pairs(state.businesses) do
 		if b.owned > 0 and b.hasManager then
 			local def = Config.BUSINESS_BY_ID[id]
 			if def then
-				local mult = Upgrades.multiplierFor(state, id) * prestigeMult
+				local mult = Upgrades.multiplierFor(state, id) * prestigeMult * boostMult.passive
 				total += Economy.revenuePerSecond(def, b.owned, mult)
 			end
 		end
@@ -605,9 +626,11 @@ local function refreshUI()
 			h.progressFill.Size = UDim2.fromScale(0, 1)
 		end
 
-		-- Combined multiplier (upgrades + prestige) so the card matches what
-		-- the server actually pays out per cycle.
-		local upgradeMult = Upgrades.multiplierFor(state, id) * Prestige.multiplierFor(state.prestige or 0)
+		-- Combined multiplier (upgrades + prestige + active income boost) so
+		-- the card matches what the server actually pays out per cycle.
+		local upgradeMult = Upgrades.multiplierFor(state, id)
+			* Prestige.multiplierFor(state.prestige or 0)
+			* Boosts.activeMultipliers(state).passive
 
 		-- Cycle-payout label (now lives to the right of the bar).
 		if b.owned > 0 then
@@ -689,6 +712,40 @@ local function refreshUI()
 		local req = Prestige.requirementFor(level)
 		local can = Prestige.canPrestige(state)
 		handles.prestigePanel.setState(level, earned, req, can)
+	end
+
+	-- Boost row: per-button timer + state styling.
+	for id, b in pairs(handles.rightPanel.boosts) do
+		local def = Boosts.BY_ID[id]
+		if def then
+			local uiState = Boosts.uiState(state, id)
+			b.multiplierLabel.Text = string.format("x%g", def.multiplier)
+			if uiState == "active" then
+				b.timerLabel.Text = Format.duration(Boosts.activeSecondsLeft(state, id))
+				b.timerLabel.TextColor3 = Theme.colors.buyBright
+				b.button.BackgroundColor3 = Theme.colors.buyAction
+			elseif uiState == "cooldown" then
+				b.timerLabel.Text = Format.duration(Boosts.cooldownSecondsLeft(state, id))
+				b.timerLabel.TextColor3 = Theme.colors.muted
+				b.button.BackgroundColor3 = Theme.colors.buyDim
+			else
+				b.timerLabel.Text = "READY"
+				b.timerLabel.TextColor3 = Theme.colors.gold
+				b.button.BackgroundColor3 = Theme.colors.panel
+			end
+		end
+	end
+
+	-- Active-boost card on top of the right panel.
+	local top, secsLeft = Boosts.topActive(state)
+	if top then
+		handles.rightPanel.activeBoostNameLabel.Text = top.name
+		handles.rightPanel.activeBoostSubLabel.Text = top.description
+		handles.rightPanel.activeBoostTimerLabel.Text = Format.duration(secsLeft)
+	else
+		handles.rightPanel.activeBoostNameLabel.Text = "No active boosts"
+		handles.rightPanel.activeBoostSubLabel.Text = "Tap a boost below to start"
+		handles.rightPanel.activeBoostTimerLabel.Text = ""
 	end
 end
 

@@ -8,6 +8,7 @@ local Config = require(Shared.Config)
 local Economy = require(Shared.Economy)
 local Upgrades = require(Shared.Upgrades)
 local Prestige = require(Shared.Prestige)
+local Boosts = require(Shared.Boosts)
 
 local DataService = require(script.Parent.DataService)
 
@@ -54,6 +55,16 @@ function EconomyService.applyOfflineProgress(profile): (number, number)
 	end
 	total *= Config.OFFLINE_EARN_RATE
 
+	-- Offline Earnings boost: if the boost was still active at the moment
+	-- the player went offline, apply its multiplier to the whole window.
+	local offlineState = profile.boosts and profile.boosts["offline"]
+	if offlineState and offlineState.activeUntil > (profile.lastOnline or now) then
+		local boostDef = Boosts.BY_ID["offline"]
+		if boostDef then
+			total *= boostDef.multiplier
+		end
+	end
+
 	if total > 0 then
 		profile.money += total
 		profile.totalEarned += total
@@ -70,8 +81,11 @@ local function tickBusiness(profile, def: Config.BusinessDef, dt: number): numbe
 	if not b or b.owned <= 0 then return 0 end
 
 	local prestigeMult = Prestige.multiplierFor(profile.prestige or 0)
-	local baseMult = Upgrades.multiplierFor(profile, def.id) * prestigeMult
-	local clickMult = Upgrades.clickMultiplier(profile)
+	local boostMult = Boosts.activeMultipliers(profile)
+	-- Income Boost (target="passive") stacks on every cycle, managed or manual.
+	local baseMult = Upgrades.multiplierFor(profile, def.id) * prestigeMult * boostMult.passive
+	-- Click Power (target="manual") only stacks on manually-tapped cycles.
+	local clickMult = Upgrades.clickMultiplier(profile) * boostMult.manual
 
 	local payout = 0
 	if b.hasManager then
@@ -85,7 +99,6 @@ local function tickBusiness(profile, def: Config.BusinessDef, dt: number): numbe
 			b.progress = math.min(def.cycleTime, b.progress + dt)
 			if b.progress >= def.cycleTime then
 				b.progress = 0
-				-- Manual cycles get the click multiplier on top.
 				payout = Economy.cyclePayout(def, b.owned, baseMult * clickMult)
 			end
 		end
@@ -189,6 +202,24 @@ function EconomyService.doPrestige(profile): (boolean, string?, number)
 	return true, nil, newLevel
 end
 
+-- Activate a timed boost. Server validates the cooldown and stamps both
+-- activeUntil and cooldownUntil with os.time() values.
+function EconomyService.activateBoost(profile, boostId: string): (boolean, string?)
+	local def = Boosts.BY_ID[boostId]
+	if not def then return false, "Unknown boost" end
+	if not Boosts.canActivate(profile, boostId) then
+		local left = Boosts.cooldownSecondsLeft(profile, boostId)
+		return false, string.format("On cooldown (%ds)", left)
+	end
+	profile.boosts = profile.boosts or {}
+	local now = os.time()
+	profile.boosts[boostId] = {
+		activeUntil = now + def.duration,
+		cooldownUntil = now + def.cooldown,
+	}
+	return true, nil
+end
+
 -- Buy a one-time upgrade. Server is authoritative on cost + unlock checks.
 -- Returns (success, errorMessage).
 function EconomyService.buyUpgrade(profile, upgradeId: string): (boolean, string?)
@@ -223,6 +254,10 @@ function EconomyService.snapshot(profile)
 	for id, state in pairs(profile.upgrades or {}) do
 		ups[id] = { purchased = state.purchased, purchasedAt = state.purchasedAt }
 	end
+	local bsts = {}
+	for id, state in pairs(profile.boosts or {}) do
+		bsts[id] = { activeUntil = state.activeUntil, cooldownUntil = state.cooldownUntil }
+	end
 	return {
 		money = profile.money,
 		gems = profile.gems or 0,
@@ -233,6 +268,7 @@ function EconomyService.snapshot(profile)
 		businesses = biz,
 		achievements = ach,
 		upgrades = ups,
+		boosts = bsts,
 		dailyClaimedAt = profile.dailyClaimedAt or 0,
 		settings = {
 			sfxVolume = profile.settings.sfxVolume,

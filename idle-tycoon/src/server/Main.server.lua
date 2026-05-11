@@ -19,6 +19,7 @@ local hireEvent = Remotes.event("HireManager")
 local manualEvent = Remotes.event("ManualCollect")
 local buyUpgradeEvent = Remotes.event("BuyUpgrade")
 local doPrestigeEvent = Remotes.event("DoPrestige")
+local activateBoostEvent = Remotes.event("ActivateBoost")
 local settingsEvent = Remotes.event("UpdateSettings")
 local claimDailyEvent = Remotes.event("ClaimDailyReward")
 local stateUpdate = Remotes.event("StateUpdate")
@@ -160,6 +161,21 @@ buyUpgradeEvent.OnServerEvent:Connect(function(player: Player, upgradeId: any)
 		maybeSaveAfterPurchase(player)
 	else
 		notify:FireClient(player, { kind = "error", message = err or "Purchase failed" })
+	end
+end)
+
+activateBoostEvent.OnServerEvent:Connect(function(player: Player, boostId: any)
+	if type(boostId) ~= "string" then return end
+	local profile = DataService.get(player)
+	if not profile then return end
+	local ok, err = EconomyService.activateBoost(profile, boostId)
+	if ok then
+		pushState(player)
+		-- Save promptly — boost cooldowns must survive disconnect to keep
+		-- their gameplay-balance role.
+		DataService.autosave(player)
+	else
+		notify:FireClient(player, { kind = "error", message = err or "Cannot activate" })
 	end
 end)
 

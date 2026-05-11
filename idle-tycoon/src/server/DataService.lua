@@ -65,6 +65,11 @@ export type UpgradeState = {
 	purchasedAt: number,
 }
 
+export type BoostState = {
+	activeUntil: number,
+	cooldownUntil: number,
+}
+
 export type ProfileData = {
 	version: number,
 	money: number,
@@ -75,6 +80,7 @@ export type ProfileData = {
 	settings: ProfileSettings,
 	achievements: { [string]: AchievementState },
 	upgrades: { [string]: UpgradeState },
+	boosts: { [string]: BoostState },
 	dailyClaimedAt: number, -- os.time() of last claim
 	totalEarnedAtLastPrestige: number,
 	lastOnline: number,
@@ -82,7 +88,7 @@ export type ProfileData = {
 	createdAt: number,
 }
 
-local CURRENT_VERSION = 5
+local CURRENT_VERSION = 6
 
 local function defaultSettings(): ProfileSettings
 	return { sfxVolume = 1.0, musicVolume = 0.6 }
@@ -99,6 +105,7 @@ local function defaultProfile(): ProfileData
 		settings = defaultSettings(),
 		achievements = {},
 		upgrades = {},
+		boosts = {},
 		dailyClaimedAt = 0,
 		totalEarnedAtLastPrestige = 0,
 		lastOnline = os.time(),
@@ -146,6 +153,11 @@ local function migrate(data: any): ProfileData
 		data.totalEarnedAtLastPrestige = data.totalEarned or 0
 	else
 		data.totalEarnedAtLastPrestige = tonumber(data.totalEarnedAtLastPrestige) or 0
+	end
+
+	-- v5 -> v6: add boosts state (timed multiplier per boost id).
+	if type(data.boosts) ~= "table" then
+		data.boosts = {}
 	end
 
 	data.version = CURRENT_VERSION
