@@ -15,6 +15,7 @@ local Achievements = require(Shared.Achievements)
 local Upgrades = require(Shared.Upgrades)
 local Prestige = require(Shared.Prestige)
 local Boosts = require(Shared.Boosts)
+local Contracts = require(Shared.Contracts)
 
 local Theme = require(script.Parent:WaitForChild("Theme"))
 local UI = require(script.Parent:WaitForChild("UI"))
@@ -31,6 +32,7 @@ local manualEvent = Remotes.event("ManualCollect")
 local buyUpgradeEvent = Remotes.event("BuyUpgrade")
 local doPrestigeEvent = Remotes.event("DoPrestige")
 local activateBoostEvent = Remotes.event("ActivateBoost")
+local claimContractEvent = Remotes.event("ClaimContract")
 local setAgencyNameEvent = Remotes.event("SetAgencyName")
 local settingsEvent = Remotes.event("UpdateSettings")
 local claimDailyEvent = Remotes.event("ClaimDailyReward")
@@ -76,6 +78,7 @@ type ClientState = {
 	achievements: { [string]: ClientAchievement },
 	upgrades: { [string]: ClientUpgrade },
 	boosts: { [string]: ClientBoost },
+	contracts: { Contracts.Slot },
 	dailyClaimedAt: number,
 	lastUpdate: number,
 }
@@ -92,6 +95,7 @@ local state: ClientState = {
 	achievements = {},
 	upgrades = {},
 	boosts = {},
+	contracts = {},
 	dailyClaimedAt = 0,
 	lastUpdate = os.clock(),
 }
@@ -181,17 +185,19 @@ end
 handles.gemAddButton.MouseButton1Click:Connect(function()
 	comingSoon("Science Lab")
 end)
-handles.eventActivateButton.MouseButton1Click:Connect(function()
-	comingSoon("Events")
-end)
-handles.inviteButton.MouseButton1Click:Connect(function()
-	comingSoon("Invite friends")
-end)
-
 -- Daily reward: fires the server claim, which validates the 24h cooldown.
 handles.sidebar.onClaimDaily = function()
 	claimDailyEvent:FireServer()
 	Sounds.play("uiClick")
+end
+
+-- Mission contracts: click CLAIM → server validates completion + credits.
+handles.contractsBar.onClaim = function(slotIndex: number)
+	claimContractEvent:FireServer(slotIndex)
+	Sounds.play("milestone")
+end
+for _, slot in ipairs(handles.contractsBar.slots) do
+	Effects.bindPressFeel(slot.claimButton)
 end
 
 -- Daily reward + bottom event countdowns. Re-evaluated once per second.
@@ -214,14 +220,6 @@ task.spawn(function()
 			handles.sidebar.dailyTimerLabel.TextColor3 = Theme.colors.text
 			handles.sidebar.setDailyClaimEnabled(false)
 		end
-
-		-- Bottom-bar event timer: placeholder 24h rolling countdown until the
-		-- event system ships. Replace with real event state in Phase 2.
-		local eventSecsLeft = 24 * 3600 - (now % (24 * 3600))
-		local eh = math.floor(eventSecsLeft / 3600)
-		local em = math.floor((eventSecsLeft % 3600) / 60)
-		local es = eventSecsLeft % 60
-		handles.eventTimerLabel.Text = string.format("⏰  %02d:%02d:%02d", eh, em, es)
 
 		task.wait(1)
 	end
@@ -301,8 +299,10 @@ for id, h in pairs(handles.businesses) do
 	h.tapButton.MouseButton1Click:Connect(function()
 		manualEvent:FireServer(id)
 		Sounds.play("tap")
-		-- Optimistic local cycle start so the bar moves immediately,
-		-- without waiting for the next 5Hz server snapshot.
+		-- Optimistic state bumps so the contract progress bar (and cycle
+		-- bar) move immediately, without waiting for the next 5Hz server
+		-- snapshot. Server's authoritative totalClicks gets reconciled in.
+		state.totalClicks += 1
 		local b = state.businesses[id]
 		if b and b.owned > 0 and not b.hasManager and b.progress <= 0 then
 			b.progress = 0.001
@@ -366,6 +366,22 @@ local function applySnapshot(snap)
 			state.boosts[id] = {
 				activeUntil = st.activeUntil or 0,
 				cooldownUntil = st.cooldownUntil or 0,
+			}
+		end
+	end
+	if type(snap.contracts) == "table" then
+		-- Replace the full array — server is authoritative on slot contents.
+		state.contracts = {}
+		for i, slot in ipairs(snap.contracts) do
+			state.contracts[i] = {
+				objective = slot.objective or "funds",
+				target = slot.target or 0,
+				baseline = slot.baseline or 0,
+				rewardFunds = slot.rewardFunds or 0,
+				rewardScience = slot.rewardScience or 0,
+				title = slot.title or "",
+				description = slot.description or "",
+				issuedAt = slot.issuedAt or 0,
 			}
 		end
 	end
@@ -476,14 +492,18 @@ local function advanceLocal(dt: number)
 					b.progress += dt
 					while b.progress >= def.cycleTime do
 						b.progress -= def.cycleTime
-						state.money += Economy.cyclePayout(def, b.owned, mult)
+						local payout = Economy.cyclePayout(def, b.owned, mult)
+						state.money += payout
+						state.totalEarned += payout
 						state.gems += Economy.cycleScience(def, b.owned, mult)
 					end
 				elseif b.progress > 0 then
 					b.progress = math.min(def.cycleTime, b.progress + dt)
 					if b.progress >= def.cycleTime then
 						local manualMult = mult * clickMult * boostMult.manual
-						state.money += Economy.cyclePayout(def, b.owned, manualMult)
+						local payout = Economy.cyclePayout(def, b.owned, manualMult)
+						state.money += payout
+						state.totalEarned += payout
 						state.gems += Economy.cycleScience(def, b.owned, manualMult)
 						b.progress = 0
 					end
@@ -800,6 +820,19 @@ local function refreshUI()
 		handles.rightPanel.activeBoostNameLabel.Text = "No active boosts"
 		handles.rightPanel.activeBoostSubLabel.Text = "Tap a boost below to start"
 		handles.rightPanel.activeBoostTimerLabel.Text = ""
+	end
+
+	-- Contracts strip: feed the three slots with current progress.
+	local contractMetrics = {
+		totalEarned = state.totalEarned or 0,
+		gems = state.gems or 0,
+		totalClicks = state.totalClicks or 0,
+	}
+	for i = 1, 3 do
+		local slotHandle = handles.contractsBar.slots[i]
+		if slotHandle then
+			slotHandle.setSlotState(state.contracts[i], contractMetrics)
+		end
 	end
 end
 

@@ -20,6 +20,7 @@ local manualEvent = Remotes.event("ManualCollect")
 local buyUpgradeEvent = Remotes.event("BuyUpgrade")
 local doPrestigeEvent = Remotes.event("DoPrestige")
 local activateBoostEvent = Remotes.event("ActivateBoost")
+local claimContractEvent = Remotes.event("ClaimContract")
 local setAgencyNameEvent = Remotes.event("SetAgencyName")
 local settingsEvent = Remotes.event("UpdateSettings")
 local claimDailyEvent = Remotes.event("ClaimDailyReward")
@@ -66,6 +67,7 @@ local function onPlayerAdded(player: Player)
 	local profile = DataService.load(player)
 	if not profile then return end -- load failure already kicked
 	EconomyService.initProfile(profile)
+	EconomyService.ensureContracts(profile)
 
 	local offlineAmount, offlineSeconds = EconomyService.applyOfflineProgress(profile)
 	-- Bump lastOnline now that we've consumed the elapsed window.
@@ -174,6 +176,19 @@ setAgencyNameEvent.OnServerEvent:Connect(function(player: Player, name: any)
 		DataService.autosave(player)
 	else
 		notify:FireClient(player, { kind = "error", message = err or "Invalid name" })
+	end
+end)
+
+claimContractEvent.OnServerEvent:Connect(function(player: Player, slotIndex: any)
+	local profile = DataService.get(player)
+	if not profile then return end
+	local ok, err = EconomyService.claimContract(profile, slotIndex)
+	if ok then
+		pushState(player)
+		runAchievementChecks(player) -- contract funds may cross a totalEarned threshold
+		DataService.autosave(player)
+	else
+		notify:FireClient(player, { kind = "error", message = err or "Cannot claim" })
 	end
 end)
 

@@ -70,6 +70,17 @@ export type BoostState = {
 	cooldownUntil: number,
 }
 
+export type ContractSlot = {
+	objective: string,
+	target: number,
+	baseline: number,
+	rewardFunds: number,
+	rewardScience: number,
+	title: string,
+	description: string,
+	issuedAt: number,
+}
+
 export type ProfileData = {
 	version: number,
 	agencyName: string,
@@ -82,6 +93,7 @@ export type ProfileData = {
 	achievements: { [string]: AchievementState },
 	upgrades: { [string]: UpgradeState },
 	boosts: { [string]: BoostState },
+	contracts: { ContractSlot },
 	dailyClaimedAt: number, -- os.time() of last claim
 	totalEarnedAtLastPrestige: number,
 	lastOnline: number,
@@ -89,7 +101,7 @@ export type ProfileData = {
 	createdAt: number,
 }
 
-local CURRENT_VERSION = 7
+local CURRENT_VERSION = 8
 
 local function defaultSettings(): ProfileSettings
 	return { sfxVolume = 1.0, musicVolume = 0.6 }
@@ -108,6 +120,7 @@ local function defaultProfile(): ProfileData
 		achievements = {},
 		upgrades = {},
 		boosts = {},
+		contracts = {},
 		dailyClaimedAt = 0,
 		totalEarnedAtLastPrestige = 0,
 		lastOnline = os.time(),
@@ -165,6 +178,12 @@ local function migrate(data: any): ProfileData
 	-- v6 -> v7: add agencyName. Empty string triggers the setup modal client-side.
 	if type(data.agencyName) ~= "string" then
 		data.agencyName = ""
+	end
+
+	-- v7 -> v8: add contracts slot array. Empty triggers ensureContracts() to
+	-- roll the initial 3 on first server load.
+	if type(data.contracts) ~= "table" then
+		data.contracts = {}
 	end
 
 	data.version = CURRENT_VERSION

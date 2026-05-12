@@ -9,6 +9,7 @@ local Economy = require(Shared.Economy)
 local Upgrades = require(Shared.Upgrades)
 local Prestige = require(Shared.Prestige)
 local Boosts = require(Shared.Boosts)
+local Contracts = require(Shared.Contracts)
 
 local DataService = require(script.Parent.DataService)
 
@@ -219,6 +220,55 @@ function EconomyService.doPrestige(profile): (boolean, string?, number)
 	return true, nil, newLevel
 end
 
+-- Ensure all 3 contract slots are populated. Called on profile load and
+-- after each claim so empty slots get fresh contracts. Cheap; only rolls
+-- new contracts when a slot is actually empty.
+function EconomyService.ensureContracts(profile)
+	profile.contracts = profile.contracts or {}
+	for i = 1, 3 do
+		if not profile.contracts[i] then
+			profile.contracts[i] = Contracts.roll(profile)
+		end
+	end
+end
+
+-- Snapshot of metrics that contract progress checks against.
+local function contractMetrics(profile)
+	return {
+		totalEarned = profile.totalEarned or 0,
+		gems = profile.gems or 0,
+		totalClicks = profile.totalClicks or 0,
+	}
+end
+
+-- Claim a completed contract. Server validates completion against profile
+-- metrics, credits both currencies, and rerolls the slot. Reroll is
+-- intentionally NOT a separate cost — claiming IS what generates the next
+-- contract in that slot.
+function EconomyService.claimContract(profile, slotIndex: any): (boolean, string?)
+	if type(slotIndex) ~= "number" then return false, "Invalid slot" end
+	slotIndex = math.floor(slotIndex)
+	if slotIndex < 1 or slotIndex > 3 then return false, "Invalid slot" end
+
+	local slot = profile.contracts and profile.contracts[slotIndex]
+	if not slot then return false, "Empty slot" end
+
+	if not Contracts.complete(slot, contractMetrics(profile)) then
+		return false, "Contract not yet complete"
+	end
+
+	-- Credit rewards. Contract funds count toward totalEarned so they show
+	-- up in lifetime stats; we accept that they also count toward the next
+	-- prestige (which scales rewards anyway, so it's self-balancing).
+	profile.money = (profile.money or 0) + slot.rewardFunds
+	profile.totalEarned = (profile.totalEarned or 0) + slot.rewardFunds
+	profile.gems = (profile.gems or 0) + slot.rewardScience
+
+	-- Reroll this slot with a fresh contract scaled to the new metrics.
+	profile.contracts[slotIndex] = Contracts.roll(profile)
+	return true, nil
+end
+
 -- Activate a timed boost. Server validates the cooldown and stamps both
 -- activeUntil and cooldownUntil with os.time() values.
 function EconomyService.activateBoost(profile, boostId: string): (boolean, string?)
@@ -279,6 +329,21 @@ function EconomyService.snapshot(profile)
 	for id, state in pairs(profile.boosts or {}) do
 		bsts[id] = { activeUntil = state.activeUntil, cooldownUntil = state.cooldownUntil }
 	end
+	-- Contracts: copy each slot by value so the client mirror can mutate
+	-- progress freely (it doesn't, but cleaner contract).
+	local cts: { any } = {}
+	for i, slot in ipairs(profile.contracts or {}) do
+		cts[i] = {
+			objective = slot.objective,
+			target = slot.target,
+			baseline = slot.baseline,
+			rewardFunds = slot.rewardFunds,
+			rewardScience = slot.rewardScience,
+			title = slot.title,
+			description = slot.description,
+			issuedAt = slot.issuedAt,
+		}
+	end
 	return {
 		money = profile.money,
 		gems = profile.gems or 0,
@@ -291,6 +356,7 @@ function EconomyService.snapshot(profile)
 		achievements = ach,
 		upgrades = ups,
 		boosts = bsts,
+		contracts = cts,
 		dailyClaimedAt = profile.dailyClaimedAt or 0,
 		settings = {
 			sfxVolume = profile.settings.sfxVolume,

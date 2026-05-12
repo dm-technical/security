@@ -18,6 +18,7 @@ local TechNodeCard = require(script.Parent.TechNodeCard)
 local PrestigePanel = require(script.Parent.PrestigePanel)
 local LeftSidebar = require(script.Parent.LeftSidebar)
 local RightPanel = require(script.Parent.RightPanel)
+local ContractsBar = require(script.Parent.ContractsBar)
 
 local UI = {}
 
@@ -30,10 +31,8 @@ export type Handles = {
 	qtyButton: TextButton,
 	gemLabel: TextLabel,
 	gemAddButton: TextButton,
-	-- Bottom event bar
-	eventTimerLabel: TextLabel,
-	eventActivateButton: TextButton,
-	inviteButton: TextButton,
+	-- Mission contracts strip (bottom of the center column)
+	contractsBar: ContractsBar.Handle,
 	-- Player card
 	playerCard: Frame,
 	playerNameLabel: TextLabel,
@@ -308,11 +307,12 @@ function UI.build(): Handles
 	local sidebar = LeftSidebar.build(root)
 	local rightPanel = RightPanel.build(root)
 
-	-- Center scrolling business list. Leaves room for the bottom event bar.
+	-- Center scrolling business list. Leaves room for the contracts strip
+	-- pinned to the bottom (~96px tall + 12px padding).
 	local centerScroll = Instance.new("ScrollingFrame")
 	centerScroll.Name = "Businesses"
 	centerScroll.Position = UDim2.fromOffset(244, 104)
-	centerScroll.Size = UDim2.new(1, -558, 1, -198)
+	centerScroll.Size = UDim2.new(1, -558, 1, -224)
 	centerScroll.BackgroundTransparency = 1
 	centerScroll.BorderSizePixel = 0
 	centerScroll.ScrollBarThickness = 6
@@ -367,128 +367,10 @@ function UI.build(): Handles
 		prestigeContainer.Visible = (id == "prestige")
 	end
 
-	-- Bottom event bar: Double Cash Event (left) + Invite Friends (right).
-	local bottomBar = Instance.new("Frame")
-	bottomBar.Name = "BottomBar"
-	bottomBar.AnchorPoint = Vector2.new(0, 1)
-	bottomBar.Position = UDim2.new(0, 244, 1, -12)
-	bottomBar.Size = UDim2.new(1, -558, 0, 70)
-	bottomBar.BackgroundTransparency = 1
-	bottomBar.Parent = root
-
-	local eventCard = Instance.new("Frame")
-	eventCard.Size = UDim2.new(0.6, -8, 1, 0)
-	eventCard.BackgroundColor3 = Theme.colors.panel
-	eventCard.BorderSizePixel = 0
-	eventCard.Parent = bottomBar
-	Theme.corner(eventCard, 14)
-	Theme.stroke(eventCard, Theme.colors.gold, 2, 0.2)
-	Theme.padding(eventCard, 10)
-
-	local eventIcon = Instance.new("TextLabel")
-	eventIcon.Size = UDim2.fromOffset(44, 44)
-	eventIcon.AnchorPoint = Vector2.new(0, 0.5)
-	eventIcon.Position = UDim2.fromScale(0, 0.5)
-	eventIcon.BackgroundColor3 = Theme.colors.gold
-	eventIcon.Text = "x2"
-	eventIcon.TextColor3 = Theme.colors.textDark
-	eventIcon.Font = Theme.font.display
-	eventIcon.TextSize = 18
-	eventIcon.Parent = eventCard
-	Theme.corner(eventIcon, 10)
-
-	local eventTitle = Instance.new("TextLabel")
-	eventTitle.Size = UDim2.new(1, -160, 0, 22)
-	eventTitle.Position = UDim2.fromOffset(54, 4)
-	eventTitle.BackgroundTransparency = 1
-	eventTitle.Text = "GOVT STIMULUS ACTIVE!"
-	eventTitle.TextColor3 = Theme.colors.gold
-	eventTitle.TextXAlignment = Enum.TextXAlignment.Left
-	eventTitle.Font = Theme.font.display
-	eventTitle.TextSize = 16
-	eventTitle.Parent = eventCard
-
-	local eventTimerLabel = Instance.new("TextLabel")
-	eventTimerLabel.Size = UDim2.new(1, -160, 0, 20)
-	eventTimerLabel.Position = UDim2.fromOffset(54, 26)
-	eventTimerLabel.BackgroundTransparency = 1
-	eventTimerLabel.Text = "⏰  23:59:59"
-	eventTimerLabel.TextColor3 = Theme.colors.text
-	eventTimerLabel.TextXAlignment = Enum.TextXAlignment.Left
-	eventTimerLabel.Font = Theme.font.bodyBold
-	eventTimerLabel.TextSize = 14
-	eventTimerLabel.Parent = eventCard
-
-	local eventActivateButton = Instance.new("TextButton")
-	eventActivateButton.AnchorPoint = Vector2.new(1, 0.5)
-	eventActivateButton.Position = UDim2.new(1, 0, 0.5, 0)
-	eventActivateButton.Size = UDim2.fromOffset(140, 40)
-	eventActivateButton.BackgroundColor3 = Theme.colors.buyAction
-	eventActivateButton.AutoButtonColor = false
-	eventActivateButton.Text = "ACTIVATE"
-	eventActivateButton.TextColor3 = Theme.colors.text
-	eventActivateButton.Font = Theme.font.display
-	eventActivateButton.TextSize = 16
-	eventActivateButton.Parent = eventCard
-	Theme.corner(eventActivateButton, 10)
-	Theme.stroke(eventActivateButton, Theme.colors.buyBright, 2, 0)
-
-	local inviteCard = Instance.new("Frame")
-	inviteCard.AnchorPoint = Vector2.new(1, 0)
-	inviteCard.Position = UDim2.fromScale(1, 0)
-	inviteCard.Size = UDim2.new(0.4, -8, 1, 0)
-	inviteCard.BackgroundColor3 = Theme.colors.panel
-	inviteCard.BorderSizePixel = 0
-	inviteCard.Parent = bottomBar
-	Theme.corner(inviteCard, 14)
-	Theme.stroke(inviteCard, Theme.colors.manager, 2, 0.2)
-	Theme.padding(inviteCard, 10)
-
-	local inviteAvatars = Instance.new("TextLabel")
-	inviteAvatars.Size = UDim2.fromOffset(44, 44)
-	inviteAvatars.AnchorPoint = Vector2.new(0, 0.5)
-	inviteAvatars.Position = UDim2.fromScale(0, 0.5)
-	inviteAvatars.BackgroundTransparency = 1
-	inviteAvatars.Text = "👥"
-	inviteAvatars.Font = Theme.font.heading
-	inviteAvatars.TextSize = 28
-	inviteAvatars.Parent = inviteCard
-
-	local inviteTitle = Instance.new("TextLabel")
-	inviteTitle.Size = UDim2.new(1, -160, 0, 20)
-	inviteTitle.Position = UDim2.fromOffset(50, 4)
-	inviteTitle.BackgroundTransparency = 1
-	inviteTitle.Text = "Recruit Engineers!"
-	inviteTitle.TextColor3 = Theme.colors.text
-	inviteTitle.TextXAlignment = Enum.TextXAlignment.Left
-	inviteTitle.Font = Theme.font.heading
-	inviteTitle.TextSize = 15
-	inviteTitle.Parent = inviteCard
-
-	local inviteSubtitle = Instance.new("TextLabel")
-	inviteSubtitle.Size = UDim2.new(1, -160, 0, 18)
-	inviteSubtitle.Position = UDim2.fromOffset(50, 24)
-	inviteSubtitle.BackgroundTransparency = 1
-	inviteSubtitle.Text = "Earn 10% more funds!"
-	inviteSubtitle.TextColor3 = Theme.colors.muted
-	inviteSubtitle.TextXAlignment = Enum.TextXAlignment.Left
-	inviteSubtitle.Font = Theme.font.body
-	inviteSubtitle.TextSize = 12
-	inviteSubtitle.Parent = inviteCard
-
-	local inviteButton = Instance.new("TextButton")
-	inviteButton.AnchorPoint = Vector2.new(1, 0.5)
-	inviteButton.Position = UDim2.new(1, 0, 0.5, 0)
-	inviteButton.Size = UDim2.fromOffset(110, 40)
-	inviteButton.BackgroundColor3 = Theme.colors.manager
-	inviteButton.AutoButtonColor = false
-	inviteButton.Text = "INVITE"
-	inviteButton.TextColor3 = Theme.colors.text
-	inviteButton.Font = Theme.font.display
-	inviteButton.TextSize = 16
-	inviteButton.Parent = inviteCard
-	Theme.corner(inviteButton, 10)
-	Theme.stroke(inviteButton, Theme.colors.managerBright, 2, 0)
+	-- Bottom strip: 3 procedural mission contracts. Replaces the previously
+	-- stubbed Double Cash Event + Invite Friends cards (those were never
+	-- wired to real gameplay).
+	local contractsBar = ContractsBar.build(root)
 
 	-- Notification stack: bottom-center so it doesn't fight the right panel.
 	local notifyContainer = Instance.new("Frame")
@@ -574,9 +456,7 @@ function UI.build(): Handles
 		qtyButton = qtyButton,
 		gemLabel = gemLabel,
 		gemAddButton = gemAddButton,
-		eventTimerLabel = eventTimerLabel,
-		eventActivateButton = eventActivateButton,
-		inviteButton = inviteButton,
+		contractsBar = contractsBar,
 		playerCard = playerCard,
 		playerNameLabel = playerNameLabel,
 		playerPrestigeLabel = playerPrestigeLabel,
