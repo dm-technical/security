@@ -240,7 +240,7 @@ local function buildHeaderBar(parent: Instance): (TextLabel, TextLabel, TextButt
 	gemIcon.Size = UDim2.fromOffset(28, 28)
 	gemIcon.Position = UDim2.fromOffset(8, 8)
 	gemIcon.BackgroundTransparency = 1
-	gemIcon.Text = "💎"
+	gemIcon.Text = "🔬"
 	gemIcon.Font = Theme.font.heading
 	gemIcon.TextSize = 20
 	gemIcon.Parent = gemFrame

@@ -139,17 +139,19 @@ function UpgradeCard.build(parent: Instance, def: Upgrades.Definition, layoutOrd
 	local buyHeader = Instance.new("TextLabel")
 	buyHeader.Size = UDim2.new(1, 0, 0.4, 0)
 	buyHeader.BackgroundTransparency = 1
-	buyHeader.Text = "BUY"
+	buyHeader.Text = "RESEARCH"
 	buyHeader.TextColor3 = Theme.colors.text
 	buyHeader.Font = Theme.font.heading
 	buyHeader.TextSize = 14
 	buyHeader.Parent = buyButton
 
+	-- Science cost displayed with the science icon (🔬) to make clear it's
+	-- not paid in funds.
 	local buyLabel = Instance.new("TextLabel")
 	buyLabel.Size = UDim2.new(1, 0, 0.6, 0)
 	buyLabel.Position = UDim2.fromScale(0, 0.4)
 	buyLabel.BackgroundTransparency = 1
-	buyLabel.Text = "$0"
+	buyLabel.Text = "🔬 0"
 	buyLabel.TextColor3 = Theme.colors.text
 	buyLabel.Font = Theme.font.display
 	buyLabel.TextSize = 18
@@ -174,15 +176,14 @@ function UpgradeCard.build(parent: Instance, def: Upgrades.Definition, layoutOrd
 		-- Reset the per-frame styling toggles.
 		local req = def.requiresOwned
 		if kind == "owned" then
-			-- Already purchased — show a permanent "OWNED" pill instead of BUY.
 			buyButton.BackgroundColor3 = Theme.colors.buyDim
-			buyHeader.Text = "OWNED"
+			buyHeader.Text = "RESEARCHED"
 			buyHeader.TextColor3 = Theme.colors.muted
 			buyLabel.Text = "✓"
 			buyLabel.TextColor3 = Theme.colors.muted
 			buyButton.Active = false
 			frame.BackgroundTransparency = 0.4
-			statusLabel.Text = "Purchased"
+			statusLabel.Text = "Researched"
 			statusLabel.TextColor3 = Theme.colors.buyBright
 		elseif kind == "locked" then
 			buyButton.BackgroundColor3 = Theme.colors.buyDim
@@ -201,12 +202,13 @@ function UpgradeCard.build(parent: Instance, def: Upgrades.Definition, layoutOrd
 		else
 			-- available
 			buyButton.BackgroundColor3 = canAfford and Theme.colors.buyAction or Theme.colors.buyDim
-			buyHeader.Text = "BUY"
+			buyHeader.Text = "RESEARCH"
 			buyHeader.TextColor3 = Theme.colors.text
 			buyLabel.TextColor3 = Theme.colors.text
 			buyButton.Active = canAfford
 			frame.BackgroundTransparency = 0
-			statusLabel.Text = ""
+			statusLabel.Text = canAfford and "" or "Need more science"
+			statusLabel.TextColor3 = Theme.colors.muted
 		end
 	end
 

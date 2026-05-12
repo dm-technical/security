@@ -45,12 +45,17 @@ Config.BUY_QUANTITIES = { 1, 10, 100, "MAX" }
 export type BusinessDef = {
 	id: string,
 	name: string,
-	icon: string, -- emoji shown when iconAssetId is empty
-	iconAssetId: string, -- "rbxassetid://NUMBER" — empty falls back to emoji
+	icon: string,
+	iconAssetId: string,
 	baseCost: number,
 	baseRevenue: number,
-	cycleTime: number, -- seconds for one production cycle at level 1
-	costMultiplier: number, -- per-level cost growth
+	-- Science yield per completed cycle at 1 owned. Scales like baseRevenue
+	-- (×owned ×milestoneMult ×globalMult) inside Economy.cycleScience.
+	-- Roughly 10% of baseRevenue so funds outpace science 10:1, the rate
+	-- the R&D-cost table is balanced against.
+	cycleScience: number,
+	cycleTime: number,
+	costMultiplier: number,
 	managerCost: number,
 	managerName: string,
 }
@@ -69,6 +74,7 @@ Config.BUSINESSES = {
 		iconAssetId = "",
 		baseCost = 3,
 		baseRevenue = 1,
+		cycleScience = 0.1,
 		cycleTime = 1,
 		costMultiplier = 1.05,
 		managerCost = 250,
@@ -81,6 +87,7 @@ Config.BUSINESSES = {
 		iconAssetId = "",
 		baseCost = 40,
 		baseRevenue = 60,
+		cycleScience = 6,
 		cycleTime = 3,
 		costMultiplier = 1.10,
 		managerCost = 2_500,
@@ -93,6 +100,7 @@ Config.BUSINESSES = {
 		iconAssetId = "",
 		baseCost = 500,
 		baseRevenue = 540,
+		cycleScience = 54,
 		cycleTime = 6,
 		costMultiplier = 1.12,
 		managerCost = 25_000,
@@ -105,6 +113,7 @@ Config.BUSINESSES = {
 		iconAssetId = "",
 		baseCost = 6_000,
 		baseRevenue = 4_320,
+		cycleScience = 432,
 		cycleTime = 12,
 		costMultiplier = 1.13,
 		managerCost = 200_000,
@@ -117,6 +126,7 @@ Config.BUSINESSES = {
 		iconAssetId = "",
 		baseCost = 103_680,
 		baseRevenue = 51_840,
+		cycleScience = 5_184,
 		cycleTime = 24,
 		costMultiplier = 1.12,
 		managerCost = 1_200_000,
@@ -129,6 +139,7 @@ Config.BUSINESSES = {
 		iconAssetId = "",
 		baseCost = 1_244_160,
 		baseRevenue = 622_080,
+		cycleScience = 62_208,
 		cycleTime = 96,
 		costMultiplier = 1.11,
 		managerCost = 10_000_000,
@@ -141,6 +152,7 @@ Config.BUSINESSES = {
 		iconAssetId = "",
 		baseCost = 14_929_920,
 		baseRevenue = 7_464_960,
+		cycleScience = 746_496,
 		cycleTime = 384,
 		costMultiplier = 1.10,
 		managerCost = 111_111_111,
@@ -153,6 +165,7 @@ Config.BUSINESSES = {
 		iconAssetId = "",
 		baseCost = 179_159_040,
 		baseRevenue = 89_579_520,
+		cycleScience = 8_957_952,
 		cycleTime = 1_536,
 		costMultiplier = 1.09,
 		managerCost = 555_555_555,
@@ -165,6 +178,7 @@ Config.BUSINESSES = {
 		iconAssetId = "",
 		baseCost = 2_149_908_480,
 		baseRevenue = 1_074_954_240,
+		cycleScience = 107_495_424,
 		cycleTime = 6_144,
 		costMultiplier = 1.08,
 		managerCost = 10_000_000_000,
@@ -177,6 +191,7 @@ Config.BUSINESSES = {
 		iconAssetId = "",
 		baseCost = 25_798_901_760,
 		baseRevenue = 12_899_450_880,
+		cycleScience = 1_289_945_088,
 		cycleTime = 36_864,
 		costMultiplier = 1.07,
 		managerCost = 100_000_000_000,

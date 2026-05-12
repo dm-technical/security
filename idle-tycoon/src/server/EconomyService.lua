@@ -46,22 +46,27 @@ function EconomyService.applyOfflineProgress(profile): (number, number)
 
 	local prestigeMult = Prestige.multiplierFor(profile.prestige or 0)
 	local total = 0
+	local totalScience = 0
 	for _, def in ipairs(Config.BUSINESSES) do
 		local b = profile.businesses[def.id]
 		if b and b.owned > 0 and b.hasManager then
 			local mult = Upgrades.multiplierFor(profile, def.id) * prestigeMult
 			total += Economy.revenuePerSecond(def, b.owned, mult) * capped
+			totalScience += Economy.sciencePerSecond(def, b.owned, mult) * capped
 		end
 	end
 	total *= Config.OFFLINE_EARN_RATE
+	totalScience *= Config.OFFLINE_EARN_RATE
 
 	-- Offline Earnings boost: if the boost was still active at the moment
-	-- the player went offline, apply its multiplier to the whole window.
+	-- the player went offline, apply its multiplier to the whole window for
+	-- BOTH currencies (funds + science).
 	local offlineState = profile.boosts and profile.boosts["offline"]
 	if offlineState and offlineState.activeUntil > (profile.lastOnline or now) then
 		local boostDef = Boosts.BY_ID["offline"]
 		if boostDef then
 			total *= boostDef.multiplier
+			totalScience *= boostDef.multiplier
 		end
 	end
 
@@ -69,16 +74,19 @@ function EconomyService.applyOfflineProgress(profile): (number, number)
 		profile.money += total
 		profile.totalEarned += total
 	end
+	if totalScience > 0 then
+		profile.gems = (profile.gems or 0) + totalScience
+	end
 	return total, capped
 end
 
--- Tick a single business by `dt` seconds.
--- For managed businesses we accumulate progress and pay out completed cycles.
--- For unmanaged businesses, progress only advances if a manual cycle is active.
--- Multiplier comes from purchased upgrades; click multiplier stacks on manual cycles.
-local function tickBusiness(profile, def: Config.BusinessDef, dt: number): number
+-- Tick a single business by `dt` seconds. Returns (fundsPayout, sciencePayout)
+-- so the outer loop can accumulate both currencies before crediting once.
+-- Both scale by the same multiplier composition: upgrades × prestige × boosts
+-- (passive on managed/manual, plus click on manual cycles).
+local function tickBusiness(profile, def: Config.BusinessDef, dt: number): (number, number)
 	local b = profile.businesses[def.id]
-	if not b or b.owned <= 0 then return 0 end
+	if not b or b.owned <= 0 then return 0, 0 end
 
 	local prestigeMult = Prestige.multiplierFor(profile.prestige or 0)
 	local boostMult = Boosts.activeMultipliers(profile)
@@ -88,11 +96,13 @@ local function tickBusiness(profile, def: Config.BusinessDef, dt: number): numbe
 	local clickMult = Upgrades.clickMultiplier(profile) * boostMult.manual
 
 	local payout = 0
+	local science = 0
 	if b.hasManager then
 		b.progress += dt
 		while b.progress >= def.cycleTime do
 			b.progress -= def.cycleTime
 			payout += Economy.cyclePayout(def, b.owned, baseMult)
+			science += Economy.cycleScience(def, b.owned, baseMult)
 		end
 	else
 		if b.progress > 0 and b.progress < def.cycleTime then
@@ -100,20 +110,27 @@ local function tickBusiness(profile, def: Config.BusinessDef, dt: number): numbe
 			if b.progress >= def.cycleTime then
 				b.progress = 0
 				payout = Economy.cyclePayout(def, b.owned, baseMult * clickMult)
+				science = Economy.cycleScience(def, b.owned, baseMult * clickMult)
 			end
 		end
 	end
-	return payout
+	return payout, science
 end
 
 function EconomyService.tick(profile, dt: number): number
 	local total = 0
+	local totalScience = 0
 	for _, def in ipairs(Config.BUSINESSES) do
-		total += tickBusiness(profile, def, dt)
+		local p, s = tickBusiness(profile, def, dt)
+		total += p
+		totalScience += s
 	end
 	if total > 0 then
 		profile.money += total
 		profile.totalEarned += total
+	end
+	if totalScience > 0 then
+		profile.gems = (profile.gems or 0) + totalScience
 	end
 	return total
 end
@@ -220,21 +237,22 @@ function EconomyService.activateBoost(profile, boostId: string): (boolean, strin
 	return true, nil
 end
 
--- Buy a one-time upgrade. Server is authoritative on cost + unlock checks.
--- Returns (success, errorMessage).
+-- Buy a one-time R&D upgrade. Costs science (profile.gems), not funds.
+-- Server is authoritative on cost + unlock checks.
 function EconomyService.buyUpgrade(profile, upgradeId: string): (boolean, string?)
 	local def = Upgrades.BY_ID[upgradeId]
-	if not def then return false, "Unknown upgrade" end
+	if not def then return false, "Unknown research" end
 	if Upgrades.isPurchased(profile, upgradeId) then
-		return false, "Already purchased"
+		return false, "Already researched"
 	end
 	if not Upgrades.unlocked(profile, def) then
 		return false, "Not unlocked yet"
 	end
-	if profile.money < def.cost then
-		return false, "Not enough money"
+	local science = profile.gems or 0
+	if science < def.scienceCost then
+		return false, "Not enough science"
 	end
-	profile.money -= def.cost
+	profile.gems = science - def.scienceCost
 	profile.upgrades = profile.upgrades or {}
 	profile.upgrades[upgradeId] = { purchased = true, purchasedAt = os.time() }
 	return true, nil

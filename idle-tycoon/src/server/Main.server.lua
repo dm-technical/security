@@ -200,7 +200,7 @@ doPrestigeEvent.OnServerEvent:Connect(function(player: Player)
 		pushState(player)
 		notify:FireClient(player, {
 			kind = "info",
-			message = string.format("Prestige %d! All revenue +%d%%", newLevel, newLevel * 20),
+			message = string.format("Generation %d! All funds +%d%%", newLevel, newLevel * 20),
 		})
 		-- Persist immediately — prestige is too destructive to leave to autosave.
 		DataService.autosave(player)
@@ -224,7 +224,7 @@ claimDailyEvent.OnServerEvent:Connect(function(player: Player)
 	profile.dailyClaimedAt = now
 	profile.gems = (profile.gems or 0) + DAILY_GEM_REWARD
 	pushState(player)
-	notify:FireClient(player, { kind = "info", message = "+" .. DAILY_GEM_REWARD .. " gems claimed!" })
+	notify:FireClient(player, { kind = "info", message = "Senate Grant: +" .. DAILY_GEM_REWARD .. " science" })
 	DataService.autosave(player)
 end)
 

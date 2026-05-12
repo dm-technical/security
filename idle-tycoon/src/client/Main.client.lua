@@ -178,7 +178,7 @@ handles.rightPanel.onViewAllClick = function()
 	comingSoon("Achievements")
 end
 handles.gemAddButton.MouseButton1Click:Connect(function()
-	comingSoon("Gem shop")
+	comingSoon("Science Lab")
 end)
 handles.eventActivateButton.MouseButton1Click:Connect(function()
 	comingSoon("Events")
@@ -410,7 +410,7 @@ achievementUnlocked.OnClientEvent:Connect(function(payload)
 				Effects.celebrationBanner(
 					handles.screenGui,
 					def.icon .. "  " .. def.name .. " unlocked!",
-					"+" .. tostring(def.gemReward) .. " 💎"
+					"+" .. tostring(def.gemReward) .. " 🔬 science"
 				)
 				Sounds.play("milestone")
 			end)
@@ -468,18 +468,22 @@ local function advanceLocal(dt: number)
 		if b.owned > 0 then
 			local def = Config.BUSINESS_BY_ID[id]
 			if def then
-				-- Same composition as server-side tickBusiness.
+				-- Same composition as server-side tickBusiness. Each cycle pays
+				-- both funds (state.money) and science (state.gems).
 				local mult = Upgrades.multiplierFor(state, id) * prestigeMult * boostMult.passive
 				if b.hasManager then
 					b.progress += dt
 					while b.progress >= def.cycleTime do
 						b.progress -= def.cycleTime
 						state.money += Economy.cyclePayout(def, b.owned, mult)
+						state.gems += Economy.cycleScience(def, b.owned, mult)
 					end
 				elseif b.progress > 0 then
 					b.progress = math.min(def.cycleTime, b.progress + dt)
 					if b.progress >= def.cycleTime then
-						state.money += Economy.cyclePayout(def, b.owned, mult * clickMult * boostMult.manual)
+						local manualMult = mult * clickMult * boostMult.manual
+						state.money += Economy.cyclePayout(def, b.owned, manualMult)
+						state.gems += Economy.cycleScience(def, b.owned, manualMult)
 						b.progress = 0
 					end
 				end
@@ -728,14 +732,14 @@ local function refreshUI()
 		end
 	end
 
-	-- Upgrade rows: locked / available / owned + cost + affordability.
+	-- R&D rows: locked / available / researched + science cost + affordability.
 	for id, h in pairs(handles.upgrades) do
 		local def = h.def
 		local owned = Upgrades.isPurchased(state, id)
 		local unlocked = Upgrades.unlocked(state, def)
-		local canAfford = state.money >= def.cost
+		local canAfford = state.gems >= def.scienceCost
 
-		h.buyLabel.Text = Format.money(def.cost)
+		h.buyLabel.Text = "🔬 " .. Format.short(def.scienceCost)
 		if owned then
 			h.setState("owned", false)
 		elseif not unlocked then

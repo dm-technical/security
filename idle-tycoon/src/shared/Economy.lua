@@ -59,6 +59,20 @@ function Economy.cyclePayout(def: Config.BusinessDef, owned: number, globalMult:
 	return def.baseRevenue * owned * Economy.milestoneMultiplier(owned) * globalMult
 end
 
+-- Science produced by one full cycle at this ownership level. Same scaling
+-- as cyclePayout (owned × milestone × global) but using the def's smaller
+-- cycleScience base so funds outpace science roughly 10:1.
+function Economy.cycleScience(def: Config.BusinessDef, owned: number, globalMult: number): number
+	if owned <= 0 then return 0 end
+	return (def.cycleScience or 0) * owned * Economy.milestoneMultiplier(owned) * globalMult
+end
+
+-- Steady-state science per second (used for offline accrual and rate displays).
+function Economy.sciencePerSecond(def: Config.BusinessDef, owned: number, globalMult: number): number
+	if owned <= 0 or def.cycleTime <= 0 then return 0 end
+	return Economy.cycleScience(def, owned, globalMult) / def.cycleTime
+end
+
 -- Steady-state revenue per second (used for offline accrual and DPS displays).
 function Economy.revenuePerSecond(def: Config.BusinessDef, owned: number, globalMult: number): number
 	if owned <= 0 or def.cycleTime <= 0 then return 0 end

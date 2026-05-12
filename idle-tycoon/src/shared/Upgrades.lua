@@ -18,7 +18,7 @@ export type Definition = {
 	name: string,
 	description: string,
 	icon: string,
-	cost: number,
+	scienceCost: number, -- paid in science (the profile.gems field), not funds
 	multiplier: number,
 	target: Target,
 	businessId: string?, -- set when target == "business"
@@ -26,6 +26,8 @@ export type Definition = {
 }
 
 -- Helper to generate the three-tier R&D ladder used by every mission program.
+-- Costs are science, scaled to take ~10-30 minutes to grind at the unlock
+-- point. Field name kept as scienceCost so the buy path is unambiguous.
 local function biz(id: string, name: string, icon: string, baseCost: number): { Definition }
 	return {
 		{
@@ -33,7 +35,7 @@ local function biz(id: string, name: string, icon: string, baseCost: number): { 
 			name = name .. " Mk II",
 			description = "2x " .. name .. " contract value",
 			icon = icon,
-			cost = baseCost,
+			scienceCost = baseCost,
 			multiplier = 2,
 			target = "business",
 			businessId = id,
@@ -44,7 +46,7 @@ local function biz(id: string, name: string, icon: string, baseCost: number): { 
 			name = name .. " Mk III",
 			description = "3x " .. name .. " contract value",
 			icon = icon,
-			cost = baseCost * 10,
+			scienceCost = baseCost * 10,
 			multiplier = 3,
 			target = "business",
 			businessId = id,
@@ -55,7 +57,7 @@ local function biz(id: string, name: string, icon: string, baseCost: number): { 
 			name = name .. " Mk IV",
 			description = "5x " .. name .. " contract value",
 			icon = icon,
-			cost = baseCost * 100,
+			scienceCost = baseCost * 100,
 			multiplier = 5,
 			target = "business",
 			businessId = id,
@@ -73,7 +75,7 @@ local catalog: { Definition } = {
 		name = "International Coalition",
 		description = "+25% funds from all missions",
 		icon = "🌐",
-		cost = 50_000,
+		scienceCost = 5_000,
 		multiplier = 1.25,
 		target = "global_revenue",
 		requiresOwned = 0,
@@ -83,7 +85,7 @@ local catalog: { Definition } = {
 		name = "Lucrative Contracts",
 		description = "+50% funds from all missions",
 		icon = "📜",
-		cost = 5_000_000,
+		scienceCost = 500_000,
 		multiplier = 1.5,
 		target = "global_revenue",
 		requiresOwned = 0,
@@ -93,7 +95,7 @@ local catalog: { Definition } = {
 		name = "Manual Launch Override",
 		description = "+200% manual launch payout",
 		icon = "🎯",
-		cost = 100_000,
+		scienceCost = 10_000,
 		multiplier = 3,
 		target = "global_click",
 		requiresOwned = 0,

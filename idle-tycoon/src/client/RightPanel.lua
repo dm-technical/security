@@ -324,7 +324,7 @@ function RightPanel.build(parent: Instance): Handle
 		gemReward.Position = UDim2.fromScale(1, 0)
 		gemReward.Size = UDim2.fromOffset(60, 24)
 		gemReward.BackgroundTransparency = 1
-		gemReward.Text = "💎 " .. tostring(def.gemReward)
+		gemReward.Text = "🔬 " .. tostring(def.gemReward)
 		gemReward.TextColor3 = Theme.colors.gemBright
 		gemReward.TextXAlignment = Enum.TextXAlignment.Right
 		gemReward.Font = Theme.font.heading
