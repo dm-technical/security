@@ -245,6 +245,9 @@ function EconomyService.buyUpgrade(profile, upgradeId: string): (boolean, string
 	if Upgrades.isPurchased(profile, upgradeId) then
 		return false, "Already researched"
 	end
+	if not Upgrades.prereqsMet(profile, def) then
+		return false, "Research a prior tier first"
+	end
 	if not Upgrades.unlocked(profile, def) then
 		return false, "Not unlocked yet"
 	end

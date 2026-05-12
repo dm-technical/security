@@ -23,11 +23,11 @@ export type Definition = {
 	target: Target,
 	businessId: string?, -- set when target == "business"
 	requiresOwned: number, -- 0 for global; otherwise minimum owned count of target business
+	prereqs: { string }, -- list of upgrade ids that must be purchased first
 }
 
 -- Helper to generate the three-tier R&D ladder used by every mission program.
--- Costs are science, scaled to take ~10-30 minutes to grind at the unlock
--- point. Field name kept as scienceCost so the buy path is unambiguous.
+-- Each tier requires the previous one purchased — that's the tech-tree spine.
 local function biz(id: string, name: string, icon: string, baseCost: number): { Definition }
 	return {
 		{
@@ -40,6 +40,7 @@ local function biz(id: string, name: string, icon: string, baseCost: number): { 
 			target = "business",
 			businessId = id,
 			requiresOwned = 25,
+			prereqs = {},
 		},
 		{
 			id = id .. "_50",
@@ -51,6 +52,7 @@ local function biz(id: string, name: string, icon: string, baseCost: number): { 
 			target = "business",
 			businessId = id,
 			requiresOwned = 50,
+			prereqs = { id .. "_25" },
 		},
 		{
 			id = id .. "_100",
@@ -62,6 +64,7 @@ local function biz(id: string, name: string, icon: string, baseCost: number): { 
 			target = "business",
 			businessId = id,
 			requiresOwned = 100,
+			prereqs = { id .. "_50" },
 		},
 	}
 end
@@ -79,16 +82,7 @@ local catalog: { Definition } = {
 		multiplier = 1.25,
 		target = "global_revenue",
 		requiresOwned = 0,
-	},
-	{
-		id = "global_revenue_2",
-		name = "Lucrative Contracts",
-		description = "+50% funds from all missions",
-		icon = "📜",
-		scienceCost = 500_000,
-		multiplier = 1.5,
-		target = "global_revenue",
-		requiresOwned = 0,
+		prereqs = {},
 	},
 	{
 		id = "global_click_1",
@@ -99,6 +93,18 @@ local catalog: { Definition } = {
 		multiplier = 3,
 		target = "global_click",
 		requiresOwned = 0,
+		prereqs = {},
+	},
+	{
+		id = "global_revenue_2",
+		name = "Lucrative Contracts",
+		description = "+50% funds from all missions",
+		icon = "📜",
+		scienceCost = 500_000,
+		multiplier = 1.5,
+		target = "global_revenue",
+		requiresOwned = 0,
+		prereqs = { "global_revenue_1" },
 	},
 }
 
@@ -157,22 +163,37 @@ function Upgrades.clickMultiplier(profile): number
 	return mult
 end
 
+function Upgrades.isPurchased(profile, defId: string): boolean
+	local state = profile.upgrades and profile.upgrades[defId]
+	return state ~= nil and state.purchased == true
+end
+
+-- True iff every node id in def.prereqs has been purchased.
+-- Empty/missing prereqs list = no gate, returns true.
+function Upgrades.prereqsMet(profile, def: Definition): boolean
+	if not def.prereqs then return true end
+	for _, pid in ipairs(def.prereqs) do
+		if not Upgrades.isPurchased(profile, pid) then
+			return false
+		end
+	end
+	return true
+end
+
 -- True iff the upgrade is buyable: not yet purchased AND (no owned requirement
--- OR profile owns enough of the target business). Cost is checked separately
--- so the UI can show "locked" vs "can't afford" distinctly.
+-- OR profile owns enough of the target business) AND all prereqs are met.
+-- Cost is checked separately so the UI can show "locked" vs "can't afford".
 function Upgrades.unlocked(profile, def: Definition): boolean
-	if profile.upgrades and profile.upgrades[def.id] and profile.upgrades[def.id].purchased then
+	if Upgrades.isPurchased(profile, def.id) then
 		return false -- already owned, not "unlocked" for purchase
+	end
+	if not Upgrades.prereqsMet(profile, def) then
+		return false
 	end
 	if def.requiresOwned <= 0 then return true end
 	local b = profile.businesses[def.businessId or ""]
 	if not b then return false end
 	return (b.owned or 0) >= def.requiresOwned
-end
-
-function Upgrades.isPurchased(profile, defId: string): boolean
-	local state = profile.upgrades and profile.upgrades[defId]
-	return state ~= nil and state.purchased == true
 end
 
 return Upgrades

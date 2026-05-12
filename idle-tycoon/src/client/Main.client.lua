@@ -156,14 +156,15 @@ handles.prestigePanel.prestigeButton.MouseButton1Click:Connect(function()
 	end
 end)
 
--- Wire BUY button on every upgrade row.
-for id, h in pairs(handles.upgrades) do
-	h.buyButton.MouseButton1Click:Connect(function()
-		if not h.buyButton.Active then return end
+-- Wire RESEARCH button on every tech tree node. The cost pill on each
+-- TechNodeCard IS the buy button (single hit area).
+for id, h in pairs(handles.techNodes) do
+	h.costLabel.MouseButton1Click:Connect(function()
+		if not h.costLabel.Active then return end
 		buyUpgradeEvent:FireServer(id)
 		Sounds.play("uiClick")
 	end)
-	Effects.bindPressFeel(h.buyButton)
+	Effects.bindPressFeel(h.costLabel)
 end
 handles.rightPanel.onBoostClick = function(id: string)
 	-- Local cooldown guard so spam-clicks don't flood the server.
@@ -732,20 +733,29 @@ local function refreshUI()
 		end
 	end
 
-	-- R&D rows: locked / available / researched + science cost + affordability.
-	for id, h in pairs(handles.upgrades) do
+	-- Tech tree nodes: researched / locked / available (with affordability).
+	-- "Locked" here covers BOTH "not enough owned of target program" AND
+	-- "prereq tier not yet researched" — Upgrades.unlocked checks both.
+	for id, h in pairs(handles.techNodes) do
 		local def = h.def
-		local owned = Upgrades.isPurchased(state, id)
+		local researched = Upgrades.isPurchased(state, id)
 		local unlocked = Upgrades.unlocked(state, def)
 		local canAfford = state.gems >= def.scienceCost
 
-		h.buyLabel.Text = "🔬 " .. Format.short(def.scienceCost)
-		if owned then
-			h.setState("owned", false)
+		if researched then
+			h.setState("researched", false)
+			h.costLabel.Text = "✓ RESEARCHED"
 		elseif not unlocked then
 			h.setState("locked", false)
+			-- Distinguish prereq-locked vs owned-count-locked in the pill.
+			if not Upgrades.prereqsMet(state, def) then
+				h.costLabel.Text = "🔒 PRIOR TIER"
+			else
+				h.costLabel.Text = string.format("🔒 OWN %d", def.requiresOwned)
+			end
 		else
 			h.setState("available", canAfford)
+			h.costLabel.Text = "🔬 " .. Format.short(def.scienceCost)
 		end
 	end
 

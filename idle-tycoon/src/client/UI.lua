@@ -13,7 +13,8 @@ local Upgrades = require(Shared.Upgrades)
 
 local Theme = require(script.Parent.Theme)
 local BusinessCard = require(script.Parent.BusinessCard)
-local UpgradeCard = require(script.Parent.UpgradeCard)
+local TechTreePanel = require(script.Parent.TechTreePanel)
+local TechNodeCard = require(script.Parent.TechNodeCard)
 local PrestigePanel = require(script.Parent.PrestigePanel)
 local LeftSidebar = require(script.Parent.LeftSidebar)
 local RightPanel = require(script.Parent.RightPanel)
@@ -44,10 +45,10 @@ export type Handles = {
 	sidebar: LeftSidebar.Handle,
 	rightPanel: RightPanel.Handle,
 	businesses: { [string]: BusinessCard.Handle },
-	upgrades: { [string]: UpgradeCard.Handle },
+	techNodes: { [string]: TechNodeCard.Handle },
 	prestigePanel: PrestigePanel.Handle,
 	businessesScroll: ScrollingFrame,
-	upgradesScroll: ScrollingFrame,
+	techTreeFrame: Frame,
 	-- Switches which center panel is visible.
 	showTab: (id: string) -> (),
 	-- Notifications + popups
@@ -332,31 +333,18 @@ function UI.build(): Handles
 		businesses[def.id] = BusinessCard.build(centerScroll, def, i)
 	end
 
-	-- Sibling scroll for upgrades; hidden until the Upgrades tab is active.
-	local upgradesScroll = Instance.new("ScrollingFrame")
-	upgradesScroll.Name = "Upgrades"
-	upgradesScroll.Position = centerScroll.Position
-	upgradesScroll.Size = centerScroll.Size
-	upgradesScroll.BackgroundTransparency = 1
-	upgradesScroll.BorderSizePixel = 0
-	upgradesScroll.ScrollBarThickness = 6
-	upgradesScroll.ScrollBarImageColor3 = Theme.colors.panelHi
-	upgradesScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
-	upgradesScroll.CanvasSize = UDim2.new()
-	upgradesScroll.ZIndex = 3
-	upgradesScroll.Visible = false
-	upgradesScroll.Parent = root
-	Theme.padding(upgradesScroll, 4)
+	-- Tech tree container; hidden until the R&D tab is active. Built once
+	-- and lives in the same center-column slot as the businesses scroll.
+	local techTreeFrame = Instance.new("Frame")
+	techTreeFrame.Name = "TechTreeContainer"
+	techTreeFrame.Position = centerScroll.Position
+	techTreeFrame.Size = centerScroll.Size
+	techTreeFrame.BackgroundTransparency = 1
+	techTreeFrame.Visible = false
+	techTreeFrame.ZIndex = 3
+	techTreeFrame.Parent = root
 
-	local upLayout = Instance.new("UIListLayout")
-	upLayout.Padding = UDim.new(0, 10)
-	upLayout.SortOrder = Enum.SortOrder.LayoutOrder
-	upLayout.Parent = upgradesScroll
-
-	local upgradeHandles: { [string]: UpgradeCard.Handle } = {}
-	for i, def in ipairs(Upgrades.DEFINITIONS) do
-		upgradeHandles[def.id] = UpgradeCard.build(upgradesScroll, def, i)
-	end
+	local techTree = TechTreePanel.build(techTreeFrame)
 
 	-- Prestige panel: occupies the same center column area.
 	local prestigeContainer = Instance.new("Frame")
@@ -375,7 +363,7 @@ function UI.build(): Handles
 
 	local function showTab(id: string)
 		centerScroll.Visible = (id == "businesses")
-		upgradesScroll.Visible = (id == "upgrades")
+		techTreeFrame.Visible = (id == "upgrades")
 		prestigeContainer.Visible = (id == "prestige")
 	end
 
@@ -598,10 +586,10 @@ function UI.build(): Handles
 		sidebar = sidebar,
 		rightPanel = rightPanel,
 		businesses = businesses,
-		upgrades = upgradeHandles,
+		techNodes = techTree.nodes,
 		prestigePanel = prestigePanel,
 		businessesScroll = centerScroll,
-		upgradesScroll = upgradesScroll,
+		techTreeFrame = techTreeFrame,
 		showTab = showTab,
 		notifyContainer = notifyContainer,
 		offlinePopup = offlinePopup,
