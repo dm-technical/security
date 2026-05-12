@@ -31,9 +31,9 @@ export type Definition = {
 Boosts.DEFINITIONS = {
 	{
 		id = "click",
-		name = "Click Power",
-		description = "5× click revenue",
-		icon = "👆",
+		name = "Rapid Launch",
+		description = "5× manual launch payout",
+		icon = "🚀",
 		multiplier = 5,
 		duration = 15,
 		cooldown = 60,
@@ -41,9 +41,9 @@ Boosts.DEFINITIONS = {
 	},
 	{
 		id = "income",
-		name = "Income Boost",
-		description = "2× all income",
-		icon = "💰",
+		name = "Gov't Stimulus",
+		description = "2× all contract income",
+		icon = "🏛️",
 		multiplier = 2,
 		duration = 270,    -- 4:30
 		cooldown = 900,    -- 15 min
@@ -51,9 +51,9 @@ Boosts.DEFINITIONS = {
 	},
 	{
 		id = "offline",
-		name = "Offline Earnings",
-		description = "2× offline earnings",
-		icon = "⏰",
+		name = "Autonomous Ops",
+		description = "2× offline mission accrual",
+		icon = "🤖",
 		multiplier = 2,
 		duration = 600,    -- 10 min
 		cooldown = 1800,   -- 30 min

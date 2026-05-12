@@ -20,6 +20,7 @@ local manualEvent = Remotes.event("ManualCollect")
 local buyUpgradeEvent = Remotes.event("BuyUpgrade")
 local doPrestigeEvent = Remotes.event("DoPrestige")
 local activateBoostEvent = Remotes.event("ActivateBoost")
+local setAgencyNameEvent = Remotes.event("SetAgencyName")
 local settingsEvent = Remotes.event("UpdateSettings")
 local claimDailyEvent = Remotes.event("ClaimDailyReward")
 local stateUpdate = Remotes.event("StateUpdate")
@@ -161,6 +162,18 @@ buyUpgradeEvent.OnServerEvent:Connect(function(player: Player, upgradeId: any)
 		maybeSaveAfterPurchase(player)
 	else
 		notify:FireClient(player, { kind = "error", message = err or "Purchase failed" })
+	end
+end)
+
+setAgencyNameEvent.OnServerEvent:Connect(function(player: Player, name: any)
+	local profile = DataService.get(player)
+	if not profile then return end
+	local ok, err = EconomyService.setAgencyName(profile, name)
+	if ok then
+		pushState(player)
+		DataService.autosave(player)
+	else
+		notify:FireClient(player, { kind = "error", message = err or "Invalid name" })
 	end
 end)
 

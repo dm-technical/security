@@ -16,12 +16,12 @@ export type NavTab = {
 }
 
 local TABS: { NavTab } = {
-	{ id = "businesses",  label = "Businesses",   icon = "🏪", enabled = true  },
-	{ id = "upgrades",    label = "Upgrades",     icon = "📈", enabled = true  },
-	{ id = "prestige",    label = "Prestige",     icon = "👑", enabled = true  },
-	{ id = "achievements",label = "Achievements", icon = "🏆", enabled = false },
-	{ id = "shop",        label = "Shop",         icon = "🛒", enabled = false },
-	{ id = "boosts",      label = "Boosts",       icon = "⚡", enabled = false },
+	{ id = "businesses",  label = "Programs",     icon = "🚀", enabled = true  },
+	{ id = "upgrades",    label = "R&D",          icon = "🔬", enabled = true  },
+	{ id = "prestige",    label = "Generation",   icon = "👑", enabled = true  },
+	{ id = "achievements",label = "Mission Log",  icon = "🏆", enabled = false },
+	{ id = "shop",        label = "Store",        icon = "🛒", enabled = false },
+	{ id = "boosts",      label = "Mission Ctrl", icon = "📡", enabled = false },
 }
 
 export type Handle = {
@@ -162,7 +162,7 @@ function LeftSidebar.build(parent: Instance): Handle
 	dailyRewardLabel.Size = UDim2.new(1, -52, 0, 20)
 	dailyRewardLabel.Position = UDim2.fromOffset(52, 0)
 	dailyRewardLabel.BackgroundTransparency = 1
-	dailyRewardLabel.Text = "DAILY REWARD"
+	dailyRewardLabel.Text = "SENATE GRANT"
 	dailyRewardLabel.TextColor3 = Theme.colors.gold
 	dailyRewardLabel.TextXAlignment = Enum.TextXAlignment.Left
 	dailyRewardLabel.Font = Theme.font.display

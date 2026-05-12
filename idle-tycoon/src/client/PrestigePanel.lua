@@ -60,7 +60,7 @@ function PrestigePanel.build(parent: Instance): Handle
 	title.Size = UDim2.new(1, -80, 0, 32)
 	title.Position = UDim2.fromOffset(72, 0)
 	title.BackgroundTransparency = 1
-	title.Text = "PRESTIGE"
+	title.Text = "NEW GENERATION"
 	title.TextColor3 = Theme.colors.gemBright
 	title.TextXAlignment = Enum.TextXAlignment.Left
 	title.Font = Theme.font.display
@@ -71,7 +71,7 @@ function PrestigePanel.build(parent: Instance): Handle
 	subtitle.Size = UDim2.new(1, -80, 0, 22)
 	subtitle.Position = UDim2.fromOffset(72, 34)
 	subtitle.BackgroundTransparency = 1
-	subtitle.Text = "Reset your run for a permanent global revenue bonus"
+	subtitle.Text = "Reorganize your agency for a permanent funds multiplier"
 	subtitle.TextColor3 = Theme.colors.muted
 	subtitle.TextXAlignment = Enum.TextXAlignment.Left
 	subtitle.Font = Theme.font.body
@@ -91,7 +91,7 @@ function PrestigePanel.build(parent: Instance): Handle
 	local levelLabel = Instance.new("TextLabel")
 	levelLabel.Size = UDim2.new(0.5, 0, 1, 0)
 	levelLabel.BackgroundTransparency = 1
-	levelLabel.Text = "Level 0"
+	levelLabel.Text = "Generation 0"
 	levelLabel.TextColor3 = Theme.colors.text
 	levelLabel.TextXAlignment = Enum.TextXAlignment.Left
 	levelLabel.Font = Theme.font.display
@@ -103,7 +103,7 @@ function PrestigePanel.build(parent: Instance): Handle
 	bonusLabel.Position = UDim2.new(1, 0, 0.5, 0)
 	bonusLabel.Size = UDim2.new(0.5, 0, 1, 0)
 	bonusLabel.BackgroundTransparency = 1
-	bonusLabel.Text = "+0% revenue"
+	bonusLabel.Text = "+0% funds"
 	bonusLabel.TextColor3 = Theme.colors.gemBright
 	bonusLabel.TextXAlignment = Enum.TextXAlignment.Right
 	bonusLabel.Font = Theme.font.display
@@ -115,7 +115,7 @@ function PrestigePanel.build(parent: Instance): Handle
 	progLabel.Position = UDim2.fromOffset(0, 174)
 	progLabel.Size = UDim2.new(1, 0, 0, 22)
 	progLabel.BackgroundTransparency = 1
-	progLabel.Text = "Earn $1M to prestige"
+	progLabel.Text = "Earn $1M to advance"
 	progLabel.TextColor3 = Theme.colors.text
 	progLabel.TextXAlignment = Enum.TextXAlignment.Left
 	progLabel.Font = Theme.font.heading
@@ -173,7 +173,7 @@ function PrestigePanel.build(parent: Instance): Handle
 	keepBody.Position = UDim2.fromOffset(0, 24)
 	keepBody.Size = UDim2.new(1, 0, 1, -24)
 	keepBody.BackgroundTransparency = 1
-	keepBody.Text = "• Gems\n• Achievements\n• Lifetime stats\n• +20% revenue per level"
+	keepBody.Text = "• Science crystals\n• Achievements\n• Agency records\n• +20% funds per generation"
 	keepBody.TextColor3 = Theme.colors.text
 	keepBody.TextXAlignment = Enum.TextXAlignment.Left
 	keepBody.TextYAlignment = Enum.TextYAlignment.Top
@@ -205,7 +205,7 @@ function PrestigePanel.build(parent: Instance): Handle
 	loseBody.Position = UDim2.fromOffset(0, 24)
 	loseBody.Size = UDim2.new(1, 0, 1, -24)
 	loseBody.BackgroundTransparency = 1
-	loseBody.Text = "• Cash\n• Owned businesses\n• Hired managers\n• Purchased upgrades"
+	loseBody.Text = "• Funds\n• Vehicle fleet\n• Mission directors\n• Researched R&D"
 	loseBody.TextColor3 = Theme.colors.text
 	loseBody.TextXAlignment = Enum.TextXAlignment.Left
 	loseBody.TextYAlignment = Enum.TextYAlignment.Top
@@ -220,7 +220,7 @@ function PrestigePanel.build(parent: Instance): Handle
 	prestigeButton.Size = UDim2.new(1, 0, 0, 64)
 	prestigeButton.BackgroundColor3 = Theme.colors.gem
 	prestigeButton.AutoButtonColor = false
-	prestigeButton.Text = "PRESTIGE"
+	prestigeButton.Text = "ADVANCE GENERATION"
 	prestigeButton.TextColor3 = Theme.colors.text
 	prestigeButton.Font = Theme.font.display
 	prestigeButton.TextSize = 24
@@ -233,7 +233,7 @@ function PrestigePanel.build(parent: Instance): Handle
 	nextBonusLabel.Position = UDim2.new(0.5, 0, 1, -72)
 	nextBonusLabel.Size = UDim2.new(1, 0, 0, 20)
 	nextBonusLabel.BackgroundTransparency = 1
-	nextBonusLabel.Text = "Next prestige: +20% revenue"
+	nextBonusLabel.Text = "Next generation: +20% funds"
 	nextBonusLabel.TextColor3 = Theme.colors.gemBright
 	nextBonusLabel.Font = Theme.font.heading
 	nextBonusLabel.TextSize = 14
@@ -251,8 +251,8 @@ function PrestigePanel.build(parent: Instance): Handle
 	}
 
 	handle.setState = function(level, earnedThisRun, requirement, canPrestige)
-		levelLabel.Text = "Level " .. tostring(level)
-		bonusLabel.Text = Prestige.bonusText(level) .. " revenue"
+		levelLabel.Text = "Generation " .. tostring(level)
+		bonusLabel.Text = Prestige.bonusText(level) .. " funds"
 
 		local frac = if requirement > 0
 			then math.min(1, earnedThisRun / requirement)
@@ -261,10 +261,10 @@ function PrestigePanel.build(parent: Instance): Handle
 		progressLabel.Text = Format.money(earnedThisRun) .. " / " .. Format.money(requirement)
 
 		progLabel.Text = canPrestige
-			and "Ready to prestige!"
-			or ("Earn " .. Format.money(math.max(0, requirement - earnedThisRun)) .. " more to prestige")
+			and "Ready to advance!"
+			or ("Earn " .. Format.money(math.max(0, requirement - earnedThisRun)) .. " more to advance")
 
-		nextBonusLabel.Text = "Next prestige: " .. Prestige.bonusText(level + 1) .. " revenue (+20%)"
+		nextBonusLabel.Text = "Next generation: " .. Prestige.bonusText(level + 1) .. " funds (+20%)"
 
 		if canPrestige then
 			prestigeButton.BackgroundColor3 = Theme.colors.gem

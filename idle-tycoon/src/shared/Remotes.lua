@@ -16,6 +16,7 @@ local REMOTE_EVENTS = {
 	"BuyUpgrade",         -- client -> server: { upgradeId }
 	"DoPrestige",         -- client -> server: ()
 	"ActivateBoost",      -- client -> server: { boostId }
+	"SetAgencyName",      -- client -> server: { name }
 	"UpdateSettings",     -- client -> server: { sfxVolume?, musicVolume? }
 	"ClaimDailyReward",   -- client -> server: ()
 	"StateUpdate",        -- server -> client: full or partial state snapshot

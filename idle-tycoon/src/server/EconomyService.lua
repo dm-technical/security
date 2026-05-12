@@ -262,6 +262,7 @@ function EconomyService.snapshot(profile)
 		money = profile.money,
 		gems = profile.gems or 0,
 		prestige = profile.prestige or 0,
+		agencyName = profile.agencyName or "",
 		totalEarned = profile.totalEarned,
 		totalEarnedAtLastPrestige = profile.totalEarnedAtLastPrestige or 0,
 		totalClicks = profile.totalClicks or 0,
@@ -276,6 +277,22 @@ function EconomyService.snapshot(profile)
 		},
 		serverTime = os.clock(),
 	}
+end
+
+-- Validate + store the agency name. Called by the first-launch setup modal
+-- and from the settings panel later if we add rename UI.
+function EconomyService.setAgencyName(profile, name: any): (boolean, string?)
+	if type(name) ~= "string" then return false, "Invalid name" end
+	-- Trim leading/trailing whitespace, collapse internal runs of whitespace.
+	name = name:gsub("^%s+", ""):gsub("%s+$", ""):gsub("%s+", " ")
+	if #name < 3 then return false, "Name must be at least 3 characters" end
+	if #name > 24 then return false, "Name must be 24 characters or fewer" end
+	-- Allow letters, digits, spaces, hyphens, apostrophes. Reject anything else.
+	if not name:match("^[%w%s%-']+$") then
+		return false, "Name may only contain letters, digits, spaces, hyphens"
+	end
+	profile.agencyName = name
+	return true, nil
 end
 
 -- Apply validated settings updates from the client.

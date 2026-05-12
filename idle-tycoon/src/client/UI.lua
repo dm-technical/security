@@ -102,12 +102,12 @@ local function buildPlayerCard(parent: Instance): (Frame, TextLabel, TextLabel, 
 	nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
 	nameLabel.Parent = card
 
-	-- "👑 Prestige X" line.
+	-- "👑 Generation N" line.
 	local prestigeLabel = Instance.new("TextLabel")
 	prestigeLabel.Size = UDim2.new(1, -88, 0, 18)
 	prestigeLabel.Position = UDim2.fromOffset(86, 22)
 	prestigeLabel.BackgroundTransparency = 1
-	prestigeLabel.Text = "👑 Prestige 0"
+	prestigeLabel.Text = "👑 Generation 0"
 	prestigeLabel.TextColor3 = Theme.colors.gemBright
 	prestigeLabel.TextXAlignment = Enum.TextXAlignment.Left
 	prestigeLabel.Font = Theme.font.bodyBold
@@ -413,7 +413,7 @@ function UI.build(): Handles
 	eventTitle.Size = UDim2.new(1, -160, 0, 22)
 	eventTitle.Position = UDim2.fromOffset(54, 4)
 	eventTitle.BackgroundTransparency = 1
-	eventTitle.Text = "DOUBLE CASH EVENT!"
+	eventTitle.Text = "GOVT STIMULUS ACTIVE!"
 	eventTitle.TextColor3 = Theme.colors.gold
 	eventTitle.TextXAlignment = Enum.TextXAlignment.Left
 	eventTitle.Font = Theme.font.display
@@ -470,7 +470,7 @@ function UI.build(): Handles
 	inviteTitle.Size = UDim2.new(1, -160, 0, 20)
 	inviteTitle.Position = UDim2.fromOffset(50, 4)
 	inviteTitle.BackgroundTransparency = 1
-	inviteTitle.Text = "Invite Friends!"
+	inviteTitle.Text = "Recruit Engineers!"
 	inviteTitle.TextColor3 = Theme.colors.text
 	inviteTitle.TextXAlignment = Enum.TextXAlignment.Left
 	inviteTitle.Font = Theme.font.heading
@@ -481,7 +481,7 @@ function UI.build(): Handles
 	inviteSubtitle.Size = UDim2.new(1, -160, 0, 18)
 	inviteSubtitle.Position = UDim2.fromOffset(50, 24)
 	inviteSubtitle.BackgroundTransparency = 1
-	inviteSubtitle.Text = "Earn 10% more cash!"
+	inviteSubtitle.Text = "Earn 10% more funds!"
 	inviteSubtitle.TextColor3 = Theme.colors.muted
 	inviteSubtitle.TextXAlignment = Enum.TextXAlignment.Left
 	inviteSubtitle.Font = Theme.font.body

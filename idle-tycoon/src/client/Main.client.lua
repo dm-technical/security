@@ -23,6 +23,7 @@ local Music = require(script.Parent:WaitForChild("Music"))
 local Effects = require(script.Parent:WaitForChild("Effects"))
 local Settings = require(script.Parent:WaitForChild("Settings"))
 local Background = require(script.Parent:WaitForChild("Background"))
+local AgencySetup = require(script.Parent:WaitForChild("AgencySetup"))
 
 local buyEvent = Remotes.event("BuyBusiness")
 local hireEvent = Remotes.event("HireManager")
@@ -30,6 +31,7 @@ local manualEvent = Remotes.event("ManualCollect")
 local buyUpgradeEvent = Remotes.event("BuyUpgrade")
 local doPrestigeEvent = Remotes.event("DoPrestige")
 local activateBoostEvent = Remotes.event("ActivateBoost")
+local setAgencyNameEvent = Remotes.event("SetAgencyName")
 local settingsEvent = Remotes.event("UpdateSettings")
 local claimDailyEvent = Remotes.event("ClaimDailyReward")
 local stateUpdate = Remotes.event("StateUpdate")
@@ -42,6 +44,18 @@ local Players = game:GetService("Players")
 
 local handles = UI.build()
 local settingsPanel = Settings.build(handles.screenGui)
+local agencySetup = AgencySetup.build(handles.screenGui)
+
+-- Client-side state of the setup flow: stays true until the server accepts
+-- a valid name (snapshot returns it back to us non-empty).
+local agencyNameSet = false
+
+agencySetup.onSubmit = function(name: string)
+	setAgencyNameEvent:FireServer(name)
+	-- Server validates; on success the next snapshot will carry the new
+	-- agencyName and we hide the modal below. On failure the Notify event
+	-- arrives and we surface the error inline.
+end
 
 -- Local mirror of server state. Declared early so the closures below (daily
 -- reward countdown, snapshot handler, render loop) all capture the same
@@ -54,6 +68,7 @@ type ClientState = {
 	money: number,
 	gems: number,
 	prestige: number,
+	agencyName: string,
 	totalEarned: number,
 	totalEarnedAtLastPrestige: number,
 	totalClicks: number,
@@ -69,6 +84,7 @@ local state: ClientState = {
 	money = 0,
 	gems = 0,
 	prestige = 0,
+	agencyName = "",
 	totalEarned = 0,
 	totalEarnedAtLastPrestige = 0,
 	totalClicks = 0,
@@ -80,7 +96,8 @@ local state: ClientState = {
 	lastUpdate = os.clock(),
 }
 
--- Pre-populate the player card with the local player's display name.
+-- Player-card name shows the agency name once set, falling back to the
+-- player's display name until then. The refresh loop keeps it current.
 handles.playerNameLabel.Text = Players.LocalPlayer.DisplayName
 
 -- Start ambient coin-rain in the dedicated background layer.
@@ -309,6 +326,7 @@ local function applySnapshot(snap)
 	state.money = snap.money or state.money
 	state.gems = snap.gems or state.gems
 	state.prestige = snap.prestige or state.prestige
+	state.agencyName = snap.agencyName or state.agencyName
 	state.totalEarned = snap.totalEarned or state.totalEarned
 	state.totalEarnedAtLastPrestige = snap.totalEarnedAtLastPrestige or state.totalEarnedAtLastPrestige
 	state.totalClicks = snap.totalClicks or state.totalClicks
@@ -365,6 +383,18 @@ local function applySnapshot(snap)
 		displayedMoney = state.money
 	end
 
+	-- First-launch flow: agencyName is empty until the player names their
+	-- agency. Show the modal once; hide once a non-empty value comes back.
+	if not agencyNameSet then
+		if state.agencyName ~= "" then
+			agencyNameSet = true
+			agencySetup.hide()
+		elseif snapshotsApplied == 0 then
+			-- First snapshot arrived with no name — open the setup modal.
+			agencySetup.show()
+		end
+	end
+
 	snapshotsApplied += 1
 end
 
@@ -390,9 +420,16 @@ end)
 
 notify.OnClientEvent:Connect(function(payload)
 	if type(payload) == "table" and payload.message then
-		UI.flashNotify(handles, payload.kind or "info", payload.message)
-		if payload.kind == "error" then
+		-- If the agency-setup modal is up, error messages belong inline
+		-- (likely "name too short / invalid characters"). Otherwise toast.
+		if agencySetup.screen.Visible and payload.kind == "error" then
+			agencySetup.setError(payload.message)
 			Sounds.play("purchaseFail")
+		else
+			UI.flashNotify(handles, payload.kind or "info", payload.message)
+			if payload.kind == "error" then
+				Sounds.play("purchaseFail")
+			end
 		end
 	end
 end)
@@ -570,11 +607,14 @@ local function refreshUI()
 	local rps = totalRevenuePerSecond()
 	handles.rpsLabel.Text = if rps > 0
 		then "+" .. Format.money(rps) .. " / sec"
-		else "Tap a business to earn"
+		else "Launch a mission to earn funds"
 
-	-- Header gem counter + prestige badge.
+	-- Header gem counter + agency name + generation badge.
 	handles.gemLabel.Text = Format.short(state.gems)
-	handles.playerPrestigeLabel.Text = "👑 Prestige " .. tostring(state.prestige)
+	if state.agencyName ~= "" then
+		handles.playerNameLabel.Text = state.agencyName
+	end
+	handles.playerPrestigeLabel.Text = "👑 Generation " .. tostring(state.prestige)
 
 	-- Achievement progress rows (top 3 visible; full list behind View All).
 	local metrics = {
@@ -643,7 +683,7 @@ local function refreshUI()
 		if b.owned > 0 then
 			h.revenueLabel.Text = Format.money(Economy.revenuePerSecond(def, b.owned, upgradeMult)) .. " / sec"
 		else
-			h.revenueLabel.Text = "Tap to earn your first dollar"
+			h.revenueLabel.Text = "Tap to launch your first mission"
 		end
 
 		-- Bonus badge: shown when at least one milestone is active.
@@ -679,7 +719,7 @@ local function refreshUI()
 			h.managerButton.BackgroundTransparency = 0.2
 			managerPulses[id].enabled = false
 		else
-			h.managerStatus.Text = "Hire Manager  " .. Format.money(def.managerCost)
+			h.managerStatus.Text = "Hire Director  " .. Format.money(def.managerCost)
 			local canHire = state.money >= def.managerCost and b.owned > 0
 			h.managerStatus.TextColor3 = canHire and Theme.colors.text or Theme.colors.muted
 			h.managerButton.BackgroundColor3 = canHire and Theme.colors.manager or Theme.colors.panelAlt

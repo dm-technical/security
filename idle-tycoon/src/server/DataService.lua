@@ -72,6 +72,7 @@ export type BoostState = {
 
 export type ProfileData = {
 	version: number,
+	agencyName: string,
 	money: number,
 	gems: number,
 	prestige: number,
@@ -88,7 +89,7 @@ export type ProfileData = {
 	createdAt: number,
 }
 
-local CURRENT_VERSION = 6
+local CURRENT_VERSION = 7
 
 local function defaultSettings(): ProfileSettings
 	return { sfxVolume = 1.0, musicVolume = 0.6 }
@@ -97,6 +98,7 @@ end
 local function defaultProfile(): ProfileData
 	return {
 		version = CURRENT_VERSION,
+		agencyName = "", -- empty until the first-launch setup modal collects one
 		money = 0, -- caller seeds with starting money
 		gems = 0,
 		prestige = 0,
@@ -158,6 +160,11 @@ local function migrate(data: any): ProfileData
 	-- v5 -> v6: add boosts state (timed multiplier per boost id).
 	if type(data.boosts) ~= "table" then
 		data.boosts = {}
+	end
+
+	-- v6 -> v7: add agencyName. Empty string triggers the setup modal client-side.
+	if type(data.agencyName) ~= "string" then
+		data.agencyName = ""
 	end
 
 	data.version = CURRENT_VERSION

@@ -25,13 +25,13 @@ export type Definition = {
 	requiresOwned: number, -- 0 for global; otherwise minimum owned count of target business
 }
 
--- Helper to generate the two-step business ladder used by every business.
+-- Helper to generate the three-tier R&D ladder used by every mission program.
 local function biz(id: string, name: string, icon: string, baseCost: number): { Definition }
 	return {
 		{
 			id = id .. "_25",
-			name = name .. " Tier I",
-			description = "2x " .. name .. " revenue",
+			name = name .. " Mk II",
+			description = "2x " .. name .. " contract value",
 			icon = icon,
 			cost = baseCost,
 			multiplier = 2,
@@ -41,8 +41,8 @@ local function biz(id: string, name: string, icon: string, baseCost: number): { 
 		},
 		{
 			id = id .. "_50",
-			name = name .. " Tier II",
-			description = "3x " .. name .. " revenue",
+			name = name .. " Mk III",
+			description = "3x " .. name .. " contract value",
 			icon = icon,
 			cost = baseCost * 10,
 			multiplier = 3,
@@ -52,8 +52,8 @@ local function biz(id: string, name: string, icon: string, baseCost: number): { 
 		},
 		{
 			id = id .. "_100",
-			name = name .. " Tier III",
-			description = "5x " .. name .. " revenue",
+			name = name .. " Mk IV",
+			description = "5x " .. name .. " contract value",
 			icon = icon,
 			cost = baseCost * 100,
 			multiplier = 5,
@@ -67,12 +67,12 @@ end
 -- Catalog. Tier costs roughly mirror manager prices × 5, 50, 500.
 -- Adjust freely; nothing about the math depends on these exact numbers.
 local catalog: { Definition } = {
-	-- Global upgrades first so they sort to the top.
+	-- Global research first so they sort to the top.
 	{
 		id = "global_revenue_1",
-		name = "Tycoon's Hat",
-		description = "+25% revenue from all businesses",
-		icon = "🎩",
+		name = "International Coalition",
+		description = "+25% funds from all missions",
+		icon = "🌐",
 		cost = 50_000,
 		multiplier = 1.25,
 		target = "global_revenue",
@@ -80,9 +80,9 @@ local catalog: { Definition } = {
 	},
 	{
 		id = "global_revenue_2",
-		name = "Golden Briefcase",
-		description = "+50% revenue from all businesses",
-		icon = "💼",
+		name = "Lucrative Contracts",
+		description = "+50% funds from all missions",
+		icon = "📜",
 		cost = 5_000_000,
 		multiplier = 1.5,
 		target = "global_revenue",
@@ -90,9 +90,9 @@ local catalog: { Definition } = {
 	},
 	{
 		id = "global_click_1",
-		name = "Power Glove",
-		description = "+200% click power",
-		icon = "🥊",
+		name = "Manual Launch Override",
+		description = "+200% manual launch payout",
+		icon = "🎯",
 		cost = 100_000,
 		multiplier = 3,
 		target = "global_click",
@@ -100,18 +100,18 @@ local catalog: { Definition } = {
 	},
 }
 
--- Append each business's ladder. Costs roughly track AdVenture-style scaling.
+-- Append each program's research ladder. Costs roughly track AC-style scaling.
 for _, ladder in ipairs({
-	biz("lemonade",  "Lemonade Stand",     "🍋", 1_250),
-	biz("newspaper", "Newspaper Delivery", "📰", 12_500),
-	biz("carwash",   "Car Wash",           "🚗", 125_000),
-	biz("pizza",     "Pizza Place",        "🍕", 1_000_000),
-	biz("donut",     "Donut Shop",         "🍩", 5_000_000),
-	biz("shrimp",    "Shrimp Boat",        "🦐", 50_000_000),
-	biz("hockey",    "Hockey Team",        "🏒", 500_000_000),
-	biz("movie",     "Movie Studio",       "🎬", 5_000_000_000),
-	biz("bank",      "Bank",               "🏦", 50_000_000_000),
-	biz("oil",       "Oil Company",        "🛢️", 500_000_000_000),
+	biz("lemonade",  "Sounding Rocket",      "🚀", 1_250),
+	biz("newspaper", "Comm Satellite",       "🛰️", 12_500),
+	biz("carwash",   "Crewed Capsule",       "👨‍🚀", 125_000),
+	biz("pizza",     "Lunar Probe",          "🌑", 1_000_000),
+	biz("donut",     "Mun Lander",           "🌕", 5_000_000),
+	biz("shrimp",    "Mars Mission",         "🔴", 50_000_000),
+	biz("hockey",    "Outer System Probe",   "🪐", 500_000_000),
+	biz("movie",     "Interstellar Probe",   "✨", 5_000_000_000),
+	biz("bank",      "Orbital Colony",       "🛸", 50_000_000_000),
+	biz("oil",       "Generation Ship",      "🌌", 500_000_000_000),
 }) do
 	for _, def in ipairs(ladder) do
 		table.insert(catalog, def)

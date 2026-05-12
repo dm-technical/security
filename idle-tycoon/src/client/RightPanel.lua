@@ -161,7 +161,7 @@ function RightPanel.build(parent: Instance): Handle
 	Theme.stroke(activeBoostFrame, Theme.colors.panelBorder, 1, 0.3)
 	Theme.padding(activeBoostFrame, 12)
 
-	sectionHeader(activeBoostFrame, "⚡", "ACTIVE BOOSTS", Theme.colors.gemBright).Parent = activeBoostFrame
+	sectionHeader(activeBoostFrame, "📡", "MISSION CONTROL", Theme.colors.gemBright).Parent = activeBoostFrame
 
 	local boostRow = Instance.new("Frame")
 	boostRow.Size = UDim2.new(1, 0, 0, 64)
@@ -188,7 +188,7 @@ function RightPanel.build(parent: Instance): Handle
 	activeBoostNameLabel.Size = UDim2.new(1, -100, 0, 20)
 	activeBoostNameLabel.Position = UDim2.fromOffset(46, 0)
 	activeBoostNameLabel.BackgroundTransparency = 1
-	activeBoostNameLabel.Text = "No active boosts"
+	activeBoostNameLabel.Text = "No active operations"
 	activeBoostNameLabel.TextColor3 = Theme.colors.text
 	activeBoostNameLabel.TextXAlignment = Enum.TextXAlignment.Left
 	activeBoostNameLabel.Font = Theme.font.heading
@@ -199,7 +199,7 @@ function RightPanel.build(parent: Instance): Handle
 	activeBoostSubLabel.Size = UDim2.new(1, -100, 0, 16)
 	activeBoostSubLabel.Position = UDim2.fromOffset(46, 22)
 	activeBoostSubLabel.BackgroundTransparency = 1
-	activeBoostSubLabel.Text = "Tap a boost below to start"
+	activeBoostSubLabel.Text = "Tap an op below to engage"
 	activeBoostSubLabel.TextColor3 = Theme.colors.muted
 	activeBoostSubLabel.TextXAlignment = Enum.TextXAlignment.Left
 	activeBoostSubLabel.Font = Theme.font.body
@@ -228,7 +228,7 @@ function RightPanel.build(parent: Instance): Handle
 	Theme.stroke(achievementsCard, Theme.colors.panelBorder, 1, 0.3)
 	Theme.padding(achievementsCard, 12)
 
-	sectionHeader(achievementsCard, "✨", "ACHIEVEMENT PROGRESS", Theme.colors.gold).Parent = achievementsCard
+	sectionHeader(achievementsCard, "🏆", "MISSION RECORDS", Theme.colors.gold).Parent = achievementsCard
 
 	local achievementsContainer = Instance.new("Frame")
 	achievementsContainer.Size = UDim2.new(1, 0, 1, -80)
@@ -349,7 +349,7 @@ function RightPanel.build(parent: Instance): Handle
 	viewAllButton.Size = UDim2.new(1, 0, 0, 32)
 	viewAllButton.BackgroundColor3 = Theme.colors.panelAlt
 	viewAllButton.AutoButtonColor = false
-	viewAllButton.Text = "View All Achievements"
+	viewAllButton.Text = "View All Records"
 	viewAllButton.TextColor3 = Theme.colors.text
 	viewAllButton.Font = Theme.font.heading
 	viewAllButton.TextSize = 13
@@ -370,9 +370,9 @@ function RightPanel.build(parent: Instance): Handle
 	boostLayout.Parent = boostRowFrame
 
 	local boosts: { [string]: BoostButton } = {}
-	boosts["click"] = makeBoostButton(boostRowFrame, "click", "👆", "Click Power", "x5", "00:15", Theme.colors.buyBright, 1)
-	boosts["income"] = makeBoostButton(boostRowFrame, "income", "💰", "Income Boost", "x2", "04:30", Theme.colors.gold, 2)
-	boosts["offline"] = makeBoostButton(boostRowFrame, "offline", "⏰", "Offline Earnings", "x2", "10:00", Theme.colors.gemBright, 3)
+	boosts["click"] = makeBoostButton(boostRowFrame, "click", "🚀", "Rapid Launch", "x5", "00:15", Theme.colors.buyBright, 1)
+	boosts["income"] = makeBoostButton(boostRowFrame, "income", "🏛️", "Gov't Stimulus", "x2", "04:30", Theme.colors.gold, 2)
+	boosts["offline"] = makeBoostButton(boostRowFrame, "offline", "🤖", "Autonomous Ops", "x2", "10:00", Theme.colors.gemBright, 3)
 
 	local handle: Handle = {
 		frame = frame,
