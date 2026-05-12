@@ -197,6 +197,52 @@ local function buildGlobalRow(parent: Instance, layoutOrder: number,
 	return row
 end
 
+-- Mission tech: linear chain of 9 unlock-gate nodes. Wraps to multiple rows
+-- via UIGridLayout so the entire chain fits without horizontal scrolling.
+local MISSION_TECH_IDS = {
+	"tech_telemetry",
+	"tech_life_support",
+	"tech_long_range_comms",
+	"tech_lunar_landing",
+	"tech_interplanetary",
+	"tech_deep_space",
+	"tech_warp_theory",
+	"tech_colonization",
+	"tech_ftl",
+}
+
+local function buildMissionTechSection(parent: Instance, layoutOrder: number,
+                                       nodeStore: { [string]: TechNodeCard.Handle }): Frame
+	local row = Instance.new("Frame")
+	row.Size = UDim2.new(1, 0, 0, 0)
+	row.AutomaticSize = Enum.AutomaticSize.Y
+	row.BackgroundColor3 = Theme.colors.panel
+	row.BackgroundTransparency = 0.55
+	row.BorderSizePixel = 0
+	row.LayoutOrder = layoutOrder
+	row.Parent = parent
+	Theme.corner(row, 12)
+	Theme.padding(row, 12)
+
+	local grid = Instance.new("UIGridLayout")
+	grid.CellSize = UDim2.fromOffset(NODE_WIDTH, NODE_HEIGHT)
+	grid.CellPadding = UDim2.fromOffset(12, 12)
+	grid.FillDirection = Enum.FillDirection.Horizontal
+	grid.SortOrder = Enum.SortOrder.LayoutOrder
+	grid.Parent = row
+
+	for i, tid in ipairs(MISSION_TECH_IDS) do
+		local nodeDef = Upgrades.BY_ID[tid]
+		if nodeDef then
+			local node = TechNodeCard.build(row, nodeDef)
+			node.frame.LayoutOrder = i
+			nodeStore[tid] = node
+		end
+	end
+
+	return row
+end
+
 function TechTreePanel.build(parent: Instance): Handle
 	local scroll = Instance.new("ScrollingFrame")
 	scroll.Name = "TechTree"
@@ -221,6 +267,11 @@ function TechTreePanel.build(parent: Instance): Handle
 	sectionHeader(scroll, order, "🌐", "GLOBAL RESEARCH", Theme.colors.gold).Parent = scroll
 	order += 1
 	buildGlobalRow(scroll, order, nodes)
+	order += 1
+
+	sectionHeader(scroll, order, "🛰️", "MISSION TECH", Theme.colors.gemBright).Parent = scroll
+	order += 1
+	buildMissionTechSection(scroll, order, nodes)
 	order += 1
 
 	sectionHeader(scroll, order, "🚀", "MISSION RESEARCH", Theme.colors.buyBright).Parent = scroll

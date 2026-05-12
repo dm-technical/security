@@ -46,6 +46,7 @@ function EconomyService.applyOfflineProgress(profile): (number, number)
 	end
 
 	local prestigeMult = Prestige.multiplierFor(profile.prestige or 0)
+	local scienceMult = Upgrades.scienceYieldMultiplier(profile)
 	local total = 0
 	local totalScience = 0
 	for _, def in ipairs(Config.BUSINESSES) do
@@ -53,7 +54,7 @@ function EconomyService.applyOfflineProgress(profile): (number, number)
 		if b and b.owned > 0 and b.hasManager then
 			local mult = Upgrades.multiplierFor(profile, def.id) * prestigeMult
 			total += Economy.revenuePerSecond(def, b.owned, mult) * capped
-			totalScience += Economy.sciencePerSecond(def, b.owned, mult) * capped
+			totalScience += Economy.sciencePerSecond(def, b.owned, mult * scienceMult) * capped
 		end
 	end
 	total *= Config.OFFLINE_EARN_RATE
@@ -95,6 +96,8 @@ local function tickBusiness(profile, def: Config.BusinessDef, dt: number): (numb
 	local baseMult = Upgrades.multiplierFor(profile, def.id) * prestigeMult * boostMult.passive
 	-- Click Power (target="manual") only stacks on manually-tapped cycles.
 	local clickMult = Upgrades.clickMultiplier(profile) * boostMult.manual
+	-- Science yield: global_science research scales cycleScience but not funds.
+	local scienceMult = Upgrades.scienceYieldMultiplier(profile)
 
 	local payout = 0
 	local science = 0
@@ -103,7 +106,7 @@ local function tickBusiness(profile, def: Config.BusinessDef, dt: number): (numb
 		while b.progress >= def.cycleTime do
 			b.progress -= def.cycleTime
 			payout += Economy.cyclePayout(def, b.owned, baseMult)
-			science += Economy.cycleScience(def, b.owned, baseMult)
+			science += Economy.cycleScience(def, b.owned, baseMult * scienceMult)
 		end
 	else
 		if b.progress > 0 and b.progress < def.cycleTime then
@@ -111,7 +114,7 @@ local function tickBusiness(profile, def: Config.BusinessDef, dt: number): (numb
 			if b.progress >= def.cycleTime then
 				b.progress = 0
 				payout = Economy.cyclePayout(def, b.owned, baseMult * clickMult)
-				science = Economy.cycleScience(def, b.owned, baseMult * clickMult)
+				science = Economy.cycleScience(def, b.owned, baseMult * clickMult * scienceMult)
 			end
 		end
 	end
@@ -138,12 +141,22 @@ end
 
 -- Buy `qty` units of a business. qty may be a number or "MAX".
 -- Returns (success, errorMessage, unitsBought, totalCost).
+-- Tech gate: programs with non-empty requiresTech can't be founded until
+-- the required tech node is researched. Only gates the FIRST purchase;
+-- once owned > 0, the program scales freely.
 function EconomyService.buyBusiness(profile, businessId: string, qty: any): (boolean, string?, number, number)
 	local def = Config.BUSINESS_BY_ID[businessId]
 	if not def then return false, "Unknown business", 0, 0 end
 
 	local b = getOrInitBusiness(profile, businessId)
 	local owned = b.owned
+
+	if owned == 0 and def.requiresTech and #def.requiresTech > 0 then
+		local missing = Upgrades.missingTechFor(profile, def.requiresTech)
+		if missing then
+			return false, "Research " .. missing.name .. " first", 0, 0
+		end
+	end
 
 	local n: number
 	if qty == "MAX" then

@@ -11,7 +11,7 @@
 
 local Upgrades = {}
 
-export type Target = string -- "business" | "global_revenue" | "global_click"
+export type Target = string -- "business" | "global_revenue" | "global_click" | "global_science"
 
 export type Definition = {
 	id: string,
@@ -83,6 +83,109 @@ local catalog: { Definition } = {
 		target = "global_revenue",
 		requiresOwned = 0,
 		prereqs = {},
+	},
+
+	-- Mission tech chain. Each node gates the next mission program AND
+	-- contributes a small +science yield bonus when researched, so the
+	-- chain feels rewarding rather than just being a paywall.
+	{
+		id = "tech_telemetry",
+		name = "Telemetry Systems",
+		description = "Unlocks Comm Satellite missions  •  +10% science yield",
+		icon = "📡",
+		scienceCost = 200,
+		multiplier = 1.10,
+		target = "global_science",
+		requiresOwned = 0,
+		prereqs = {},
+	},
+	{
+		id = "tech_life_support",
+		name = "Life Support",
+		description = "Unlocks Crewed Capsule missions  •  +10% science yield",
+		icon = "🧬",
+		scienceCost = 2_000,
+		multiplier = 1.10,
+		target = "global_science",
+		requiresOwned = 0,
+		prereqs = { "tech_telemetry" },
+	},
+	{
+		id = "tech_long_range_comms",
+		name = "Long Range Comms",
+		description = "Unlocks Lunar Probe missions  •  +15% science yield",
+		icon = "📶",
+		scienceCost = 20_000,
+		multiplier = 1.15,
+		target = "global_science",
+		requiresOwned = 0,
+		prereqs = { "tech_life_support" },
+	},
+	{
+		id = "tech_lunar_landing",
+		name = "Lunar Landing Tech",
+		description = "Unlocks Mun Lander missions  •  +15% science yield",
+		icon = "🪂",
+		scienceCost = 200_000,
+		multiplier = 1.15,
+		target = "global_science",
+		requiresOwned = 0,
+		prereqs = { "tech_long_range_comms" },
+	},
+	{
+		id = "tech_interplanetary",
+		name = "Interplanetary Drives",
+		description = "Unlocks Mars Mission program  •  +20% science yield",
+		icon = "🛞",
+		scienceCost = 2_000_000,
+		multiplier = 1.20,
+		target = "global_science",
+		requiresOwned = 0,
+		prereqs = { "tech_lunar_landing" },
+	},
+	{
+		id = "tech_deep_space",
+		name = "Deep Space Network",
+		description = "Unlocks Outer System probes  •  +25% science yield",
+		icon = "🛰️",
+		scienceCost = 20_000_000,
+		multiplier = 1.25,
+		target = "global_science",
+		requiresOwned = 0,
+		prereqs = { "tech_interplanetary" },
+	},
+	{
+		id = "tech_warp_theory",
+		name = "Warp Theory",
+		description = "Unlocks Interstellar Probe program  •  +25% science yield",
+		icon = "⚛️",
+		scienceCost = 200_000_000,
+		multiplier = 1.25,
+		target = "global_science",
+		requiresOwned = 0,
+		prereqs = { "tech_deep_space" },
+	},
+	{
+		id = "tech_colonization",
+		name = "Colonization Engineering",
+		description = "Unlocks Orbital Colony program  •  +25% science yield",
+		icon = "🏗️",
+		scienceCost = 2_000_000_000,
+		multiplier = 1.25,
+		target = "global_science",
+		requiresOwned = 0,
+		prereqs = { "tech_warp_theory" },
+	},
+	{
+		id = "tech_ftl",
+		name = "FTL Drive Theory",
+		description = "Unlocks Generation Ship program  •  +30% science yield",
+		icon = "🌀",
+		scienceCost = 20_000_000_000,
+		multiplier = 1.30,
+		target = "global_science",
+		requiresOwned = 0,
+		prereqs = { "tech_colonization" },
 	},
 	{
 		id = "global_click_1",
@@ -161,6 +264,33 @@ function Upgrades.clickMultiplier(profile): number
 		end
 	end
 	return mult
+end
+
+-- Combined multiplier on every business's science yield. Stacks every
+-- purchased global_science research multiplicatively, matching the way
+-- global_revenue stacks for funds.
+function Upgrades.scienceYieldMultiplier(profile): number
+	local mult = 1
+	local purchased = profile.upgrades or {}
+	for _, def in ipairs(catalog) do
+		if def.target == "global_science" and purchased[def.id] and purchased[def.id].purchased then
+			mult *= def.multiplier
+		end
+	end
+	return mult
+end
+
+-- Returns the def of the first tech requirement not yet researched for
+-- a business, or nil if all required tech is in place. Drives the
+-- "🔬 Research X" lock overlay on tech-gated businesses.
+function Upgrades.missingTechFor(profile, requiresTech: { string }): Definition?
+	if not requiresTech then return nil end
+	for _, techId in ipairs(requiresTech) do
+		if not Upgrades.isPurchased(profile, techId) then
+			return Upgrades.BY_ID[techId]
+		end
+	end
+	return nil
 end
 
 function Upgrades.isPurchased(profile, defId: string): boolean

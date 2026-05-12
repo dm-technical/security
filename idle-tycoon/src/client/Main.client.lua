@@ -261,6 +261,10 @@ end
 local prevProgress: { [string]: number } = {}
 local prevOwned: { [string]: number } = {}
 local prevHadManager: { [string]: boolean } = {}
+-- Client-side counter: total mission launches per program in this session,
+-- used as the suffix for the launch callsign (e.g. "SR-42"). Not persisted —
+-- resets on rejoin, which is fine for a flavor counter.
+local flightNumbers: { [string]: number } = {}
 local prevMoney = 0
 -- Smoothly-animated value displayed in the HUD; lerps toward state.money.
 local displayedMoney = 0
@@ -480,13 +484,15 @@ end)
 local function advanceLocal(dt: number)
 	local clickMult = Upgrades.clickMultiplier(state)
 	local prestigeMult = Prestige.multiplierFor(state.prestige or 0)
+	local scienceMult = Upgrades.scienceYieldMultiplier(state)
 	local boostMult = Boosts.activeMultipliers(state)
 	for id, b in pairs(state.businesses) do
 		if b.owned > 0 then
 			local def = Config.BUSINESS_BY_ID[id]
 			if def then
 				-- Same composition as server-side tickBusiness. Each cycle pays
-				-- both funds (state.money) and science (state.gems).
+				-- both funds (state.money) and science (state.gems). Science
+				-- yield is further multiplied by purchased global_science tech.
 				local mult = Upgrades.multiplierFor(state, id) * prestigeMult * boostMult.passive
 				if b.hasManager then
 					b.progress += dt
@@ -495,7 +501,7 @@ local function advanceLocal(dt: number)
 						local payout = Economy.cyclePayout(def, b.owned, mult)
 						state.money += payout
 						state.totalEarned += payout
-						state.gems += Economy.cycleScience(def, b.owned, mult)
+						state.gems += Economy.cycleScience(def, b.owned, mult * scienceMult)
 					end
 				elseif b.progress > 0 then
 					b.progress = math.min(def.cycleTime, b.progress + dt)
@@ -504,7 +510,7 @@ local function advanceLocal(dt: number)
 						local payout = Economy.cyclePayout(def, b.owned, manualMult)
 						state.money += payout
 						state.totalEarned += payout
-						state.gems += Economy.cycleScience(def, b.owned, manualMult)
+						state.gems += Economy.cycleScience(def, b.owned, manualMult * scienceMult)
 						b.progress = 0
 					end
 				end
@@ -527,7 +533,9 @@ local function emitEdgeEffects()
 		-- manual: high → 0). Owned must be > 0 to count.
 		if owned > 0 and prev > b.progress and prev > def.cycleTime * 0.5 then
 			local payout = Economy.cyclePayout(def, owned, 1)
-			Effects.floatingText(h.frame, "+" .. Format.money(payout))
+			flightNumbers[id] = (flightNumbers[id] or 0) + 1
+			local launchTag = (def.callsign or "?") .. "-" .. tostring(flightNumbers[id])
+			Effects.floatingText(h.frame, launchTag .. "  +" .. Format.money(payout))
 			-- Themed flash on the per-business progress bar.
 			local theme = Theme.businessTheme(id)
 			Effects.flashBackground(h.progressFill, theme.bright, theme.base)
@@ -673,12 +681,18 @@ local function refreshUI()
 
 		h.ownedLabel.Text = "x" .. tostring(b.owned)
 
-		-- Locked overlay until first unit purchased.
+		-- Locked overlay until first unit purchased. Tech requirement (if any)
+		-- takes priority over cost since it must be satisfied first.
 		local locked = b.owned <= 0
 		if locked then
 			h.lockOverlay.Visible = true
-			local unlockCost = Economy.unitCost(def, 0)
-			h.lockLabel.Text = string.format("🔒  Unlocks at %s", Format.money(unlockCost))
+			local missing = Upgrades.missingTechFor(state, def.requiresTech)
+			if missing then
+				h.lockLabel.Text = "🔬  Research " .. missing.name
+			else
+				local unlockCost = Economy.unitCost(def, 0)
+				h.lockLabel.Text = string.format("🔒  Unlocks at %s", Format.money(unlockCost))
+			end
 		else
 			h.lockOverlay.Visible = false
 		end
