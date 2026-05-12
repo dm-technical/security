@@ -55,6 +55,7 @@ Theme.colors = {
 -- Themed colors per business id. Used by the icon card background and the
 -- progress bar fill. Keys mirror Config.BUSINESSES.id.
 Theme.businessThemes = {
+	-- Sol system
 	lemonade  = { base = Color3.fromRGB(34, 197, 94),  bright = Color3.fromRGB(74, 222, 128) },
 	newspaper = { base = Color3.fromRGB(59, 130, 246), bright = Color3.fromRGB(96, 165, 250) },
 	carwash   = { base = Color3.fromRGB(239, 68, 68),  bright = Color3.fromRGB(248, 113, 113) },
@@ -65,6 +66,10 @@ Theme.businessThemes = {
 	movie     = { base = Color3.fromRGB(234, 179, 8),  bright = Color3.fromRGB(250, 204, 21) },
 	bank      = { base = Color3.fromRGB(20, 184, 166), bright = Color3.fromRGB(45, 212, 191) },
 	oil       = { base = Color3.fromRGB(100, 116, 139),bright = Color3.fromRGB(148, 163, 184) },
+	-- Alpha Centauri — cooler, more saturated tones for the interstellar tier.
+	proxima           = { base = Color3.fromRGB(124, 58, 237),  bright = Color3.fromRGB(167, 139, 250) },
+	centauri_outpost  = { base = Color3.fromRGB(56, 189, 248),  bright = Color3.fromRGB(125, 211, 252) },
+	centauri_megacity = { base = Color3.fromRGB(244, 114, 182), bright = Color3.fromRGB(249, 168, 212) },
 }
 
 Theme.font = {

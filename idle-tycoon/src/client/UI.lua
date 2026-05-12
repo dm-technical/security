@@ -328,9 +328,51 @@ function UI.build(): Handles
 	listLayout.SortOrder = Enum.SortOrder.LayoutOrder
 	listLayout.Parent = centerScroll
 
+	-- Build a section header above each star system's programs. Iteration
+	-- is in catalog order; whenever def.system changes, insert a header
+	-- so the player visually groups Sol vs Alpha Centauri vs future systems.
+	local function buildSystemHeader(parent: Instance, sysId: string, layoutOrder: number)
+		local sys = Config.SYSTEM_BY_ID[sysId]
+		if not sys then return end
+		local row = Instance.new("Frame")
+		row.Size = UDim2.new(1, 0, 0, 36)
+		row.LayoutOrder = layoutOrder
+		row.BackgroundTransparency = 1
+		row.Parent = parent
+
+		local iconLabel = Instance.new("TextLabel")
+		iconLabel.Size = UDim2.fromOffset(28, 28)
+		iconLabel.AnchorPoint = Vector2.new(0, 0.5)
+		iconLabel.Position = UDim2.fromScale(0, 0.5)
+		iconLabel.BackgroundTransparency = 1
+		iconLabel.Text = sys.icon
+		iconLabel.Font = Theme.font.heading
+		iconLabel.TextSize = 22
+		iconLabel.Parent = row
+
+		local title = Instance.new("TextLabel")
+		title.Size = UDim2.new(1, -36, 1, 0)
+		title.Position = UDim2.fromOffset(36, 0)
+		title.BackgroundTransparency = 1
+		title.Text = sys.name
+		title.TextColor3 = Theme.colors.gemBright
+		title.TextXAlignment = Enum.TextXAlignment.Left
+		title.Font = Theme.font.display
+		title.TextSize = 16
+		title.Parent = row
+	end
+
 	local businesses: { [string]: BusinessCard.Handle } = {}
-	for i, def in ipairs(Config.BUSINESSES) do
-		businesses[def.id] = BusinessCard.build(centerScroll, def, i)
+	local order = 1
+	local lastSystem: string? = nil
+	for _, def in ipairs(Config.BUSINESSES) do
+		if def.system ~= lastSystem then
+			lastSystem = def.system
+			buildSystemHeader(centerScroll, def.system, order)
+			order += 1
+		end
+		businesses[def.id] = BusinessCard.build(centerScroll, def, order)
+		order += 1
 	end
 
 	-- Tech tree container; hidden until the R&D tab is active. Built once

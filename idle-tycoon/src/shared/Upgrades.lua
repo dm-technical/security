@@ -187,6 +187,42 @@ local catalog: { Definition } = {
 		requiresOwned = 0,
 		prereqs = { "tech_colonization" },
 	},
+
+	-- Interstellar tech: gates the Alpha Centauri programs. Costs scale to
+	-- match the science yield available once the player has Sol fully built.
+	{
+		id = "tech_centauri_drive",
+		name = "Warp Drive Mk II",
+		description = "Unlocks Proxima Probe missions  •  +30% science yield",
+		icon = "🛞",
+		scienceCost = 10_000_000_000_000, -- 10T
+		multiplier = 1.30,
+		target = "global_science",
+		requiresOwned = 0,
+		prereqs = { "tech_ftl" },
+	},
+	{
+		id = "tech_centauri_settlement",
+		name = "Interstellar Settlement",
+		description = "Unlocks Centauri Outpost  •  +30% science yield",
+		icon = "🏘️",
+		scienceCost = 100_000_000_000_000, -- 100T
+		multiplier = 1.30,
+		target = "global_science",
+		requiresOwned = 0,
+		prereqs = { "tech_centauri_drive" },
+	},
+	{
+		id = "tech_centauri_megacity",
+		name = "Interstellar Megaprojects",
+		description = "Unlocks Centauri Megacity  •  +40% science yield",
+		icon = "🏛️",
+		scienceCost = 1_000_000_000_000_000, -- 1Qa
+		multiplier = 1.40,
+		target = "global_science",
+		requiresOwned = 0,
+		prereqs = { "tech_centauri_settlement" },
+	},
 	{
 		id = "global_click_1",
 		name = "Manual Launch Override",
@@ -223,6 +259,11 @@ for _, ladder in ipairs({
 	biz("movie",     "Interstellar Probe",   "✨", 5_000_000_000),
 	biz("bank",      "Orbital Colony",       "🛸", 50_000_000_000),
 	biz("oil",       "Generation Ship",      "🌌", 500_000_000_000),
+	-- Alpha Centauri programs. Costs reflect the interstellar tier
+	-- (~10-1000× Sol-tier per Mk II) so the player feels the jump.
+	biz("proxima",           "Proxima Probe",     "🌠", 5_000_000_000_000),
+	biz("centauri_outpost",  "Centauri Outpost",  "🛰️", 50_000_000_000_000),
+	biz("centauri_megacity", "Centauri Megacity", "🏙️", 500_000_000_000_000),
 }) do
 	for _, def in ipairs(ladder) do
 		table.insert(catalog, def)

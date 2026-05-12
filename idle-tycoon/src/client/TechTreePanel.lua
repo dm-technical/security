@@ -209,6 +209,10 @@ local MISSION_TECH_IDS = {
 	"tech_warp_theory",
 	"tech_colonization",
 	"tech_ftl",
+	-- Interstellar (Alpha Centauri) chain.
+	"tech_centauri_drive",
+	"tech_centauri_settlement",
+	"tech_centauri_megacity",
 }
 
 local function buildMissionTechSection(parent: Instance, layoutOrder: number,
