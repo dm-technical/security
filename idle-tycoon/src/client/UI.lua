@@ -16,6 +16,7 @@ local BusinessCard = require(script.Parent.BusinessCard)
 local TechTreePanel = require(script.Parent.TechTreePanel)
 local TechNodeCard = require(script.Parent.TechNodeCard)
 local PrestigePanel = require(script.Parent.PrestigePanel)
+local ShopPanel = require(script.Parent.ShopPanel)
 local LeftSidebar = require(script.Parent.LeftSidebar)
 local RightPanel = require(script.Parent.RightPanel)
 local ContractsBar = require(script.Parent.ContractsBar)
@@ -46,6 +47,7 @@ export type Handles = {
 	businesses: { [string]: BusinessCard.Handle },
 	techNodes: { [string]: TechNodeCard.Handle },
 	prestigePanel: PrestigePanel.Handle,
+	shopPanel: ShopPanel.Handle,
 	businessesScroll: ScrollingFrame,
 	techTreeFrame: Frame,
 	-- Switches which center panel is visible.
@@ -403,10 +405,22 @@ function UI.build(): Handles
 	prestigePanel.frame.Size = UDim2.fromScale(1, 1)
 	prestigePanel.frame.Visible = true
 
+	-- Shop container: same center-column slot, hidden until the Shop tab opens.
+	local shopContainer = Instance.new("Frame")
+	shopContainer.Name = "ShopContainer"
+	shopContainer.Position = centerScroll.Position
+	shopContainer.Size = centerScroll.Size
+	shopContainer.BackgroundTransparency = 1
+	shopContainer.Visible = false
+	shopContainer.ZIndex = 3
+	shopContainer.Parent = root
+	local shopPanel = ShopPanel.build(shopContainer)
+
 	local function showTab(id: string)
 		centerScroll.Visible = (id == "businesses")
 		techTreeFrame.Visible = (id == "upgrades")
 		prestigeContainer.Visible = (id == "prestige")
+		shopContainer.Visible = (id == "shop")
 	end
 
 	-- Bottom strip: 3 procedural mission contracts. Replaces the previously
@@ -510,6 +524,7 @@ function UI.build(): Handles
 		businesses = businesses,
 		techNodes = techTree.nodes,
 		prestigePanel = prestigePanel,
+		shopPanel = shopPanel,
 		businessesScroll = centerScroll,
 		techTreeFrame = techTreeFrame,
 		showTab = showTab,

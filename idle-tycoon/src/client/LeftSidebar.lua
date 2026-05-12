@@ -20,7 +20,7 @@ local TABS: { NavTab } = {
 	{ id = "upgrades",    label = "R&D",          icon = "🔬", enabled = true  },
 	{ id = "prestige",    label = "Generation",   icon = "👑", enabled = true  },
 	{ id = "achievements",label = "Mission Log",  icon = "🏆", enabled = false },
-	{ id = "shop",        label = "Store",        icon = "🛒", enabled = false },
+	{ id = "shop",        label = "Store",        icon = "🛒", enabled = true  },
 	{ id = "boosts",      label = "Mission Ctrl", icon = "📡", enabled = false },
 }
 

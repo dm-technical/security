@@ -19,6 +19,7 @@ local REMOTE_EVENTS = {
 	"ClaimContract",      -- client -> server: slotIndex (1..3)
 	"SetAgencyName",      -- client -> server: { name }
 	"SetProgramName",     -- client -> server: { businessId, name }
+	"BuyShopItem",        -- client -> server: { itemId }
 	"UpdateSettings",     -- client -> server: { sfxVolume?, musicVolume? }
 	"ClaimDailyReward",   -- client -> server: ()
 	"StateUpdate",        -- server -> client: full or partial state snapshot

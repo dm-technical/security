@@ -10,6 +10,7 @@ local Upgrades = require(Shared.Upgrades)
 local Prestige = require(Shared.Prestige)
 local Boosts = require(Shared.Boosts)
 local Contracts = require(Shared.Contracts)
+local Shop = require(Shared.Shop)
 
 local DataService = require(script.Parent.DataService)
 
@@ -417,6 +418,55 @@ function EconomyService.setProgramName(profile, businessId: any, name: any): (bo
 		return false, "Name may only contain letters, digits, spaces, hyphens"
 	end
 	profile.programNames[businessId] = name
+	return true, nil
+end
+
+-- Spend science on a Shop item. Two effect kinds today:
+--   * reroll_contract — replaces a contract slot with a fresh roll
+--   * reset_boost     — clears the cooldown on a specific boost (only
+--                       valid when the boost is actually on cooldown,
+--                       i.e. not currently active and not already ready)
+function EconomyService.buyShopItem(profile, itemId: any): (boolean, string?)
+	if type(itemId) ~= "string" then return false, "Invalid item" end
+	local def = Shop.BY_ID[itemId]
+	if not def then return false, "Unknown item" end
+
+	-- Validate the effect can apply before charging — avoids "paid but
+	-- nothing happened" cases.
+	if def.effect == "reroll_contract" then
+		local slot = def.contractSlot or 0
+		if slot < 1 or slot > 3 then return false, "Invalid slot" end
+		if not profile.contracts or not profile.contracts[slot] then
+			return false, "Slot empty"
+		end
+	elseif def.effect == "reset_boost" then
+		local boostId = def.boostId or ""
+		local b = profile.boosts and profile.boosts[boostId]
+		local now = os.time()
+		if not b or b.cooldownUntil <= now then
+			return false, "Boost is ready — no need to reset"
+		end
+		if b.activeUntil > now then
+			return false, "Boost is still active"
+		end
+	else
+		return false, "Unknown effect"
+	end
+
+	local science = profile.gems or 0
+	if science < def.scienceCost then
+		return false, "Not enough science"
+	end
+
+	profile.gems = science - def.scienceCost
+
+	-- Apply.
+	if def.effect == "reroll_contract" then
+		profile.contracts[def.contractSlot :: number] = Contracts.roll(profile)
+	elseif def.effect == "reset_boost" then
+		profile.boosts[def.boostId :: string].cooldownUntil = os.time()
+	end
+
 	return true, nil
 end
 

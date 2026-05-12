@@ -23,6 +23,7 @@ local activateBoostEvent = Remotes.event("ActivateBoost")
 local claimContractEvent = Remotes.event("ClaimContract")
 local setAgencyNameEvent = Remotes.event("SetAgencyName")
 local setProgramNameEvent = Remotes.event("SetProgramName")
+local buyShopItemEvent = Remotes.event("BuyShopItem")
 local settingsEvent = Remotes.event("UpdateSettings")
 local claimDailyEvent = Remotes.event("ClaimDailyReward")
 local stateUpdate = Remotes.event("StateUpdate")
@@ -189,6 +190,18 @@ setProgramNameEvent.OnServerEvent:Connect(function(player: Player, businessId: a
 		DataService.autosave(player)
 	else
 		notify:FireClient(player, { kind = "error", message = err or "Invalid name" })
+	end
+end)
+
+buyShopItemEvent.OnServerEvent:Connect(function(player: Player, itemId: any)
+	local profile = DataService.get(player)
+	if not profile then return end
+	local ok, err = EconomyService.buyShopItem(profile, itemId)
+	if ok then
+		pushState(player)
+		DataService.autosave(player)
+	else
+		notify:FireClient(player, { kind = "error", message = err or "Purchase failed" })
 	end
 end)
 

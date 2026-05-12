@@ -16,6 +16,7 @@ local Upgrades = require(Shared.Upgrades)
 local Prestige = require(Shared.Prestige)
 local Boosts = require(Shared.Boosts)
 local Contracts = require(Shared.Contracts)
+local Shop = require(Shared.Shop)
 
 local Theme = require(script.Parent:WaitForChild("Theme"))
 local UI = require(script.Parent:WaitForChild("UI"))
@@ -36,6 +37,7 @@ local activateBoostEvent = Remotes.event("ActivateBoost")
 local claimContractEvent = Remotes.event("ClaimContract")
 local setAgencyNameEvent = Remotes.event("SetAgencyName")
 local setProgramNameEvent = Remotes.event("SetProgramName")
+local buyShopItemEvent = Remotes.event("BuyShopItem")
 local settingsEvent = Remotes.event("UpdateSettings")
 local claimDailyEvent = Remotes.event("ClaimDailyReward")
 local stateUpdate = Remotes.event("StateUpdate")
@@ -214,6 +216,17 @@ for id, h in pairs(handles.techNodes) do
 	end)
 	Effects.bindPressFeel(h.costLabel)
 end
+
+-- Wire BUY on every shop item. Server validates affordability + context
+-- (slot non-empty for rerolls, boost on cooldown for resets).
+for id, h in pairs(handles.shopPanel.items) do
+	h.buyButton.MouseButton1Click:Connect(function()
+		if not h.buyButton.Active then return end
+		buyShopItemEvent:FireServer(id)
+		Sounds.play("uiClick")
+	end)
+	Effects.bindPressFeel(h.buyButton)
+end
 handles.rightPanel.onBoostClick = function(id: string)
 	-- Local cooldown guard so spam-clicks don't flood the server.
 	if state.boosts[id] and state.boosts[id].cooldownUntil > os.time() then
@@ -226,8 +239,12 @@ end
 handles.rightPanel.onViewAllClick = function()
 	comingSoon("Achievements")
 end
+-- "+" next to the science counter opens the Shop tab — the natural place
+-- to actually spend science.
 handles.gemAddButton.MouseButton1Click:Connect(function()
-	comingSoon("Science Lab")
+	handles.sidebar.setActiveTab("shop")
+	handles.showTab("shop")
+	Sounds.play("uiClick")
 end)
 -- Daily reward: fires the server claim, which validates the 24h cooldown.
 handles.sidebar.onClaimDaily = function()
@@ -924,6 +941,45 @@ local function refreshUI()
 		local slotHandle = handles.contractsBar.slots[i]
 		if slotHandle then
 			slotHandle.setSlotState(state.contracts[i], contractMetrics)
+		end
+	end
+
+	-- Shop: per-item state. Three reasons an item can be unavailable
+	-- (in priority order): contract slot empty, boost active, boost ready.
+	-- Otherwise we just gate on affordability.
+	local nowSec = os.time()
+	for id, h in pairs(handles.shopPanel.items) do
+		local def = h.def
+		local cost = def.scienceCost
+		local available = true
+		local statusText: string? = nil
+
+		if def.effect == "reroll_contract" then
+			local slot = def.contractSlot or 0
+			if not state.contracts[slot] then
+				available = false
+				statusText = "Slot is empty"
+			end
+		elseif def.effect == "reset_boost" then
+			local boost = state.boosts[def.boostId or ""]
+			if not boost or boost.cooldownUntil <= nowSec then
+				available = false
+				statusText = "Already ready"
+			elseif boost.activeUntil > nowSec then
+				available = false
+				statusText = "Currently active"
+			else
+				statusText = string.format("Cooldown: %s",
+					Format.duration(boost.cooldownUntil - nowSec))
+			end
+		end
+
+		if not available then
+			h.setState("unavailable", cost, statusText)
+		elseif state.gems < cost then
+			h.setState("cant_afford", cost, statusText)
+		else
+			h.setState("available", cost, statusText)
 		end
 	end
 end
