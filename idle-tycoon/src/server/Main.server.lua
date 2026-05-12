@@ -22,6 +22,7 @@ local doPrestigeEvent = Remotes.event("DoPrestige")
 local activateBoostEvent = Remotes.event("ActivateBoost")
 local claimContractEvent = Remotes.event("ClaimContract")
 local setAgencyNameEvent = Remotes.event("SetAgencyName")
+local setProgramNameEvent = Remotes.event("SetProgramName")
 local settingsEvent = Remotes.event("UpdateSettings")
 local claimDailyEvent = Remotes.event("ClaimDailyReward")
 local stateUpdate = Remotes.event("StateUpdate")
@@ -171,6 +172,18 @@ setAgencyNameEvent.OnServerEvent:Connect(function(player: Player, name: any)
 	local profile = DataService.get(player)
 	if not profile then return end
 	local ok, err = EconomyService.setAgencyName(profile, name)
+	if ok then
+		pushState(player)
+		DataService.autosave(player)
+	else
+		notify:FireClient(player, { kind = "error", message = err or "Invalid name" })
+	end
+end)
+
+setProgramNameEvent.OnServerEvent:Connect(function(player: Player, businessId: any, name: any)
+	local profile = DataService.get(player)
+	if not profile then return end
+	local ok, err = EconomyService.setProgramName(profile, businessId, name)
 	if ok then
 		pushState(player)
 		DataService.autosave(player)

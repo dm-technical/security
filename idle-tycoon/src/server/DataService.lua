@@ -94,14 +94,15 @@ export type ProfileData = {
 	upgrades: { [string]: UpgradeState },
 	boosts: { [string]: BoostState },
 	contracts: { ContractSlot },
-	dailyClaimedAt: number, -- os.time() of last claim
+	programNames: { [string]: string }, -- player-set override per business id
+	dailyClaimedAt: number,
 	totalEarnedAtLastPrestige: number,
 	lastOnline: number,
 	totalEarned: number,
 	createdAt: number,
 }
 
-local CURRENT_VERSION = 8
+local CURRENT_VERSION = 9
 
 local function defaultSettings(): ProfileSettings
 	return { sfxVolume = 1.0, musicVolume = 0.6 }
@@ -121,6 +122,7 @@ local function defaultProfile(): ProfileData
 		upgrades = {},
 		boosts = {},
 		contracts = {},
+		programNames = {},
 		dailyClaimedAt = 0,
 		totalEarnedAtLastPrestige = 0,
 		lastOnline = os.time(),
@@ -184,6 +186,11 @@ local function migrate(data: any): ProfileData
 	-- roll the initial 3 on first server load.
 	if type(data.contracts) ~= "table" then
 		data.contracts = {}
+	end
+
+	-- v8 -> v9: add programNames override map. Empty = all defaults used.
+	if type(data.programNames) ~= "table" then
+		data.programNames = {}
 	end
 
 	data.version = CURRENT_VERSION

@@ -25,6 +25,7 @@ local Effects = require(script.Parent:WaitForChild("Effects"))
 local Settings = require(script.Parent:WaitForChild("Settings"))
 local Background = require(script.Parent:WaitForChild("Background"))
 local AgencySetup = require(script.Parent:WaitForChild("AgencySetup"))
+local ProgramRenameModal = require(script.Parent:WaitForChild("ProgramRenameModal"))
 
 local buyEvent = Remotes.event("BuyBusiness")
 local hireEvent = Remotes.event("HireManager")
@@ -34,6 +35,7 @@ local doPrestigeEvent = Remotes.event("DoPrestige")
 local activateBoostEvent = Remotes.event("ActivateBoost")
 local claimContractEvent = Remotes.event("ClaimContract")
 local setAgencyNameEvent = Remotes.event("SetAgencyName")
+local setProgramNameEvent = Remotes.event("SetProgramName")
 local settingsEvent = Remotes.event("UpdateSettings")
 local claimDailyEvent = Remotes.event("ClaimDailyReward")
 local stateUpdate = Remotes.event("StateUpdate")
@@ -47,6 +49,19 @@ local Players = game:GetService("Players")
 local handles = UI.build()
 local settingsPanel = Settings.build(handles.screenGui)
 local agencySetup = AgencySetup.build(handles.screenGui)
+local programRename = ProgramRenameModal.build(handles.screenGui)
+
+-- Track the in-flight rename so we can wait for the snapshot to confirm
+-- (or for an error notify) before closing the modal.
+local renamePending: { id: string, name: string }? = nil
+
+programRename.onSubmit = function(businessId: string, newName: string)
+	-- Trim client-side so the "no-op resubmit" case doesn't strand the modal.
+	newName = newName:gsub("^%s+", ""):gsub("%s+$", ""):gsub("%s+", " ")
+	setProgramNameEvent:FireServer(businessId, newName)
+	renamePending = { id = businessId, name = newName }
+	programRename.setError("Saving…")
+end
 
 -- Client-side state of the setup flow: stays true until the server accepts
 -- a valid name (snapshot returns it back to us non-empty).
@@ -79,6 +94,7 @@ type ClientState = {
 	upgrades: { [string]: ClientUpgrade },
 	boosts: { [string]: ClientBoost },
 	contracts: { Contracts.Slot },
+	programNames: { [string]: string },
 	dailyClaimedAt: number,
 	lastUpdate: number,
 }
@@ -96,9 +112,37 @@ local state: ClientState = {
 	upgrades = {},
 	boosts = {},
 	contracts = {},
+	programNames = {},
 	dailyClaimedAt = 0,
 	lastUpdate = os.clock(),
 }
+
+-- Returns the player's custom name for a program if set, otherwise the
+-- catalog default. Used everywhere we'd render def.name.
+local function displayName(def): string
+	local custom = state.programNames[def.id]
+	if custom and #custom > 0 then return custom end
+	return def.name
+end
+
+-- Auto-derive a 2-letter launch callsign from the custom name. For single
+-- words: first two letters; for multi-word names: first letter of first
+-- two words. Falls back to the catalog callsign if no override exists.
+local function callsignFor(def): string
+	local custom = state.programNames[def.id]
+	if not custom or #custom == 0 then
+		return def.callsign or "?"
+	end
+	local words: { string } = {}
+	for w in custom:gmatch("%S+") do
+		table.insert(words, w)
+	end
+	if #words == 0 then return def.callsign or "?" end
+	if #words == 1 then
+		return words[1]:sub(1, 2):upper()
+	end
+	return (words[1]:sub(1, 1) .. words[2]:sub(1, 1)):upper()
+end
 
 -- Player-card name shows the agency name once set, falling back to the
 -- player's display name until then. The refresh loop keeps it current.
@@ -313,6 +357,11 @@ for id, h in pairs(handles.businesses) do
 		end
 		Effects.punchScale(h.tapButton, 0.08)
 	end)
+	-- Click the program name to open the rename modal.
+	h.nameLabel.MouseButton1Click:Connect(function()
+		programRename.show(id, state.programNames[id] or "", h.def.name)
+		Sounds.play("uiClick")
+	end)
 end
 
 -- Snapshot application ------------------------------------------------------
@@ -389,6 +438,26 @@ local function applySnapshot(snap)
 			}
 		end
 	end
+	if type(snap.programNames) == "table" then
+		state.programNames = {}
+		for id, name in pairs(snap.programNames) do
+			if type(name) == "string" and #name > 0 then
+				state.programNames[id] = name
+			end
+		end
+
+		-- Close the rename modal if its target program now matches what we
+		-- submitted (success path). Empty submit = reset, so it's confirmed
+		-- when programNames[id] is nil.
+		if renamePending then
+			local got = state.programNames[renamePending.id]
+			local expected = renamePending.name
+			if (expected == "" and got == nil) or (got ~= nil and got == expected) then
+				programRename.hide()
+				renamePending = nil
+			end
+		end
+	end
 
 	-- Apply persisted audio settings on the very first snapshot.
 	if not settingsApplied and type(snap.settings) == "table" then
@@ -441,10 +510,14 @@ end)
 
 notify.OnClientEvent:Connect(function(payload)
 	if type(payload) == "table" and payload.message then
-		-- If the agency-setup modal is up, error messages belong inline
-		-- (likely "name too short / invalid characters"). Otherwise toast.
-		if agencySetup.screen.Visible and payload.kind == "error" then
+		-- Route validation errors to whichever rename modal is up so they
+		-- surface inline next to the input field. Otherwise toast.
+		if payload.kind == "error" and agencySetup.screen.Visible then
 			agencySetup.setError(payload.message)
+			Sounds.play("purchaseFail")
+		elseif payload.kind == "error" and programRename.screen.Visible then
+			programRename.setError(payload.message)
+			renamePending = nil
 			Sounds.play("purchaseFail")
 		else
 			UI.flashNotify(handles, payload.kind or "info", payload.message)
@@ -534,7 +607,7 @@ local function emitEdgeEffects()
 		if owned > 0 and prev > b.progress and prev > def.cycleTime * 0.5 then
 			local payout = Economy.cyclePayout(def, owned, 1)
 			flightNumbers[id] = (flightNumbers[id] or 0) + 1
-			local launchTag = (def.callsign or "?") .. "-" .. tostring(flightNumbers[id])
+			local launchTag = callsignFor(def) .. "-" .. tostring(flightNumbers[id])
 			Effects.floatingText(h.frame, launchTag .. "  +" .. Format.money(payout))
 			-- Themed flash on the per-business progress bar.
 			local theme = Theme.businessTheme(id)
@@ -560,7 +633,7 @@ local function emitEdgeEffects()
 				end
 				Effects.celebrationBanner(
 					handles.screenGui,
-					string.format("%s × %d!", def.name, crossed),
+					string.format("%s × %d!", displayName(def), crossed),
 					string.format("Revenue ×%d", mult)
 				)
 				Sounds.play("milestone")
@@ -574,7 +647,7 @@ local function emitEdgeEffects()
 				Effects.celebrationBanner(
 					handles.screenGui,
 					def.managerName .. " hired!",
-					def.name .. " runs itself now"
+					displayName(def) .. " runs itself now"
 				)
 			end
 		end
@@ -680,6 +753,11 @@ local function refreshUI()
 		local b = state.businesses[id] or { owned = 0, hasManager = false, progress = 0 }
 
 		h.ownedLabel.Text = "x" .. tostring(b.owned)
+
+		-- Display name (override or default) + a faint ✏️ to advertise that
+		-- the label is clickable. Refreshed each frame so the rename takes
+		-- effect immediately when the server snapshot lands.
+		h.nameLabel.Text = displayName(def) .. "  ✏️"
 
 		-- Locked overlay until first unit purchased. Tech requirement (if any)
 		-- takes priority over cost since it must be satisfied first.

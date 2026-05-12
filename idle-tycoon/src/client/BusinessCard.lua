@@ -20,6 +20,7 @@ export type Handle = {
 	iconImage: ImageLabel,
 	iconCard: TextButton, -- the big themed left card; doubles as manual-tap button
 	ownedLabel: TextLabel, -- the "x197" multiplier badge
+	nameLabel: TextButton, -- clickable program name; opens rename modal
 	progressBar: Frame,
 	progressFill: Frame,
 	progressLabel: TextLabel,
@@ -117,9 +118,12 @@ function BusinessCard.build(parent: Instance, def: Config.BusinessDef, layoutOrd
 	middle.BackgroundTransparency = 1
 	middle.Parent = frame
 
-	local nameLabel = Instance.new("TextLabel")
+	-- Name is a TextButton so the player can click it to rename the program.
+	-- A small ✏️ suffix is appended in refreshUI to advertise the action.
+	local nameLabel = Instance.new("TextButton")
 	nameLabel.Size = UDim2.new(1, 0, 0, 24)
 	nameLabel.BackgroundTransparency = 1
+	nameLabel.AutoButtonColor = false
 	nameLabel.Text = def.name
 	nameLabel.TextColor3 = Theme.colors.text
 	nameLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -282,6 +286,7 @@ function BusinessCard.build(parent: Instance, def: Config.BusinessDef, layoutOrd
 		iconImage = iconImage,
 		iconCard = iconCard,
 		ownedLabel = ownedLabel,
+		nameLabel = nameLabel,
 		progressBar = progressBar,
 		progressFill = progressFill,
 		progressLabel = progressLabel,

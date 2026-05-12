@@ -18,6 +18,7 @@ local REMOTE_EVENTS = {
 	"ActivateBoost",      -- client -> server: { boostId }
 	"ClaimContract",      -- client -> server: slotIndex (1..3)
 	"SetAgencyName",      -- client -> server: { name }
+	"SetProgramName",     -- client -> server: { businessId, name }
 	"UpdateSettings",     -- client -> server: { sfxVolume?, musicVolume? }
 	"ClaimDailyReward",   -- client -> server: ()
 	"StateUpdate",        -- server -> client: full or partial state snapshot

@@ -370,6 +370,7 @@ function EconomyService.snapshot(profile)
 		upgrades = ups,
 		boosts = bsts,
 		contracts = cts,
+		programNames = profile.programNames or {},
 		dailyClaimedAt = profile.dailyClaimedAt or 0,
 		settings = {
 			sfxVolume = profile.settings.sfxVolume,
@@ -392,6 +393,30 @@ function EconomyService.setAgencyName(profile, name: any): (boolean, string?)
 		return false, "Name may only contain letters, digits, spaces, hyphens"
 	end
 	profile.agencyName = name
+	return true, nil
+end
+
+-- Validate + store an override display name for a single mission program.
+-- An empty (post-trim) name clears the override, restoring the default.
+function EconomyService.setProgramName(profile, businessId: any, name: any): (boolean, string?)
+	if type(businessId) ~= "string" then return false, "Invalid program" end
+	if not Config.BUSINESS_BY_ID[businessId] then return false, "Unknown program" end
+	if type(name) ~= "string" then return false, "Invalid name" end
+
+	name = name:gsub("^%s+", ""):gsub("%s+$", ""):gsub("%s+", " ")
+	profile.programNames = profile.programNames or {}
+
+	if #name == 0 then
+		-- Empty → clear override, fall back to default.
+		profile.programNames[businessId] = nil
+		return true, nil
+	end
+
+	if #name > 24 then return false, "Name must be 24 characters or fewer" end
+	if not name:match("^[%w%s%-']+$") then
+		return false, "Name may only contain letters, digits, spaces, hyphens"
+	end
+	profile.programNames[businessId] = name
 	return true, nil
 end
 
