@@ -95,6 +95,7 @@ export type ProfileData = {
 	boosts: { [string]: BoostState },
 	contracts: { ContractSlot },
 	programNames: { [string]: string }, -- player-set override per business id
+	tutorialStep: number, -- 0 = not started; 1..N = current step; >N = done
 	dailyClaimedAt: number,
 	totalEarnedAtLastPrestige: number,
 	lastOnline: number,
@@ -102,7 +103,7 @@ export type ProfileData = {
 	createdAt: number,
 }
 
-local CURRENT_VERSION = 9
+local CURRENT_VERSION = 10
 
 local function defaultSettings(): ProfileSettings
 	return { sfxVolume = 1.0, musicVolume = 0.6 }
@@ -123,6 +124,7 @@ local function defaultProfile(): ProfileData
 		boosts = {},
 		contracts = {},
 		programNames = {},
+		tutorialStep = 0, -- triggers the first-launch tutorial after agency setup
 		dailyClaimedAt = 0,
 		totalEarnedAtLastPrestige = 0,
 		lastOnline = os.time(),
@@ -191,6 +193,17 @@ local function migrate(data: any): ProfileData
 	-- v8 -> v9: add programNames override map. Empty = all defaults used.
 	if type(data.programNames) ~= "table" then
 		data.programNames = {}
+	end
+
+	-- v9 -> v10: add tutorialStep. Existing players have already learned the
+	-- mechanics, so default them to "done" instead of triggering the popup.
+	if data.tutorialStep == nil then
+		-- New profile (defaultProfile returns 0); migrated profile with any
+		-- real progress skips straight to done.
+		local hasProgress = (data.totalEarned or 0) > 0 or (data.totalClicks or 0) > 0
+		data.tutorialStep = hasProgress and 999 or 0
+	else
+		data.tutorialStep = tonumber(data.tutorialStep) or 0
 	end
 
 	data.version = CURRENT_VERSION

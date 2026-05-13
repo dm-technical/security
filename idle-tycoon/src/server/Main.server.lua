@@ -24,6 +24,7 @@ local claimContractEvent = Remotes.event("ClaimContract")
 local setAgencyNameEvent = Remotes.event("SetAgencyName")
 local setProgramNameEvent = Remotes.event("SetProgramName")
 local buyShopItemEvent = Remotes.event("BuyShopItem")
+local advanceTutorialEvent = Remotes.event("AdvanceTutorial")
 local settingsEvent = Remotes.event("UpdateSettings")
 local claimDailyEvent = Remotes.event("ClaimDailyReward")
 local stateUpdate = Remotes.event("StateUpdate")
@@ -191,6 +192,17 @@ setProgramNameEvent.OnServerEvent:Connect(function(player: Player, businessId: a
 	else
 		notify:FireClient(player, { kind = "error", message = err or "Invalid name" })
 	end
+end)
+
+advanceTutorialEvent.OnServerEvent:Connect(function(player: Player, nextStep: any)
+	local profile = DataService.get(player)
+	if not profile then return end
+	local ok = EconomyService.advanceTutorial(profile, nextStep)
+	if ok then
+		pushState(player)
+		DataService.autosave(player)
+	end
+	-- Silent on failure — the tutorial is just guidance, no need to toast.
 end)
 
 buyShopItemEvent.OnServerEvent:Connect(function(player: Player, itemId: any)

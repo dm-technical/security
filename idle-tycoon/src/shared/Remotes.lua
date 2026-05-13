@@ -20,6 +20,7 @@ local REMOTE_EVENTS = {
 	"SetAgencyName",      -- client -> server: { name }
 	"SetProgramName",     -- client -> server: { businessId, name }
 	"BuyShopItem",        -- client -> server: { itemId }
+	"AdvanceTutorial",    -- client -> server: nextStep (number)
 	"UpdateSettings",     -- client -> server: { sfxVolume?, musicVolume? }
 	"ClaimDailyReward",   -- client -> server: ()
 	"StateUpdate",        -- server -> client: full or partial state snapshot

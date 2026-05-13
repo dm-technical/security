@@ -11,6 +11,7 @@ local Prestige = require(Shared.Prestige)
 local Boosts = require(Shared.Boosts)
 local Contracts = require(Shared.Contracts)
 local Shop = require(Shared.Shop)
+local Tutorial = require(Shared.Tutorial)
 
 local DataService = require(script.Parent.DataService)
 
@@ -372,6 +373,7 @@ function EconomyService.snapshot(profile)
 		boosts = bsts,
 		contracts = cts,
 		programNames = profile.programNames or {},
+		tutorialStep = profile.tutorialStep or 0,
 		dailyClaimedAt = profile.dailyClaimedAt or 0,
 		settings = {
 			sfxVolume = profile.settings.sfxVolume,
@@ -394,11 +396,32 @@ function EconomyService.setAgencyName(profile, name: any): (boolean, string?)
 		return false, "Name may only contain letters, digits, spaces, hyphens"
 	end
 	profile.agencyName = name
+	-- First-time naming kicks off the tutorial. Existing players with
+	-- tutorialStep already past 0 (typical migration case) keep their state.
+	if (profile.tutorialStep or 0) == 0 then
+		profile.tutorialStep = 1
+	end
 	return true, nil
 end
 
 -- Validate + store an override display name for a single mission program.
 -- An empty (post-trim) name clears the override, restoring the default.
+-- Advance / skip the first-launch tutorial. The client requests a specific
+-- next-step value rather than just "increment" so a Skip button can jump
+-- straight to the DONE sentinel in one round-trip.
+function EconomyService.advanceTutorial(profile, nextStep: any): (boolean, string?)
+	local n = tonumber(nextStep)
+	if not n then return false, "Invalid step" end
+	n = math.floor(n)
+	-- Tutorial is monotonic: never let the client roll back to an earlier step.
+	local current = profile.tutorialStep or 0
+	if n <= current then return false, "Already past that step" end
+	-- Clamp ridiculous values back to the sentinel.
+	if n > Tutorial.DONE then n = Tutorial.DONE end
+	profile.tutorialStep = n
+	return true, nil
+end
+
 function EconomyService.setProgramName(profile, businessId: any, name: any): (boolean, string?)
 	if type(businessId) ~= "string" then return false, "Invalid program" end
 	if not Config.BUSINESS_BY_ID[businessId] then return false, "Unknown program" end

@@ -17,6 +17,7 @@ local Prestige = require(Shared.Prestige)
 local Boosts = require(Shared.Boosts)
 local Contracts = require(Shared.Contracts)
 local Shop = require(Shared.Shop)
+local Tutorial = require(Shared.Tutorial)
 
 local Theme = require(script.Parent:WaitForChild("Theme"))
 local UI = require(script.Parent:WaitForChild("UI"))
@@ -27,6 +28,7 @@ local Settings = require(script.Parent:WaitForChild("Settings"))
 local Background = require(script.Parent:WaitForChild("Background"))
 local AgencySetup = require(script.Parent:WaitForChild("AgencySetup"))
 local ProgramRenameModal = require(script.Parent:WaitForChild("ProgramRenameModal"))
+local TutorialOverlay = require(script.Parent:WaitForChild("TutorialOverlay"))
 
 local buyEvent = Remotes.event("BuyBusiness")
 local hireEvent = Remotes.event("HireManager")
@@ -38,6 +40,7 @@ local claimContractEvent = Remotes.event("ClaimContract")
 local setAgencyNameEvent = Remotes.event("SetAgencyName")
 local setProgramNameEvent = Remotes.event("SetProgramName")
 local buyShopItemEvent = Remotes.event("BuyShopItem")
+local advanceTutorialEvent = Remotes.event("AdvanceTutorial")
 local settingsEvent = Remotes.event("UpdateSettings")
 local claimDailyEvent = Remotes.event("ClaimDailyReward")
 local stateUpdate = Remotes.event("StateUpdate")
@@ -52,6 +55,17 @@ local handles = UI.build()
 local settingsPanel = Settings.build(handles.screenGui)
 local agencySetup = AgencySetup.build(handles.screenGui)
 local programRename = ProgramRenameModal.build(handles.screenGui)
+local tutorialOverlay = TutorialOverlay.build(handles.screenGui)
+
+tutorialOverlay.onNext = function()
+	-- Server validates monotonic step advancement.
+	advanceTutorialEvent:FireServer((state.tutorialStep or 0) + 1)
+	Sounds.play("uiClick")
+end
+tutorialOverlay.onSkip = function()
+	advanceTutorialEvent:FireServer(Tutorial.DONE)
+	Sounds.play("uiClick")
+end
 
 -- Track the in-flight rename so we can wait for the snapshot to confirm
 -- (or for an error notify) before closing the modal.
@@ -68,6 +82,10 @@ end
 -- Client-side state of the setup flow: stays true until the server accepts
 -- a valid name (snapshot returns it back to us non-empty).
 local agencyNameSet = false
+
+-- The tutorial step currently rendered on screen, or nil if the overlay is
+-- hidden. Lets us re-show only when the step number actually advances.
+local shownTutorialStep: number? = nil
 
 agencySetup.onSubmit = function(name: string)
 	setAgencyNameEvent:FireServer(name)
@@ -97,6 +115,7 @@ type ClientState = {
 	boosts: { [string]: ClientBoost },
 	contracts: { Contracts.Slot },
 	programNames: { [string]: string },
+	tutorialStep: number,
 	dailyClaimedAt: number,
 	lastUpdate: number,
 }
@@ -115,6 +134,7 @@ local state: ClientState = {
 	boosts = {},
 	contracts = {},
 	programNames = {},
+	tutorialStep = 0,
 	dailyClaimedAt = 0,
 	lastUpdate = os.clock(),
 }
@@ -400,6 +420,7 @@ local function applySnapshot(snap)
 	state.gems = snap.gems or state.gems
 	state.prestige = snap.prestige or state.prestige
 	state.agencyName = snap.agencyName or state.agencyName
+	state.tutorialStep = snap.tutorialStep or state.tutorialStep
 	state.totalEarned = snap.totalEarned or state.totalEarned
 	state.totalEarnedAtLastPrestige = snap.totalEarnedAtLastPrestige or state.totalEarnedAtLastPrestige
 	state.totalClicks = snap.totalClicks or state.totalClicks
@@ -501,6 +522,25 @@ local function applySnapshot(snap)
 		elseif snapshotsApplied == 0 then
 			-- First snapshot arrived with no name — open the setup modal.
 			agencySetup.show()
+		end
+	end
+
+	-- Tutorial flow: drives the popup based on tutorialStep. Server bumps
+	-- 0 → 1 inside setAgencyName, so the tutorial naturally follows the
+	-- agency-setup modal. We only re-show when the step number actually
+	-- changes, so the popup doesn't re-animate every snapshot.
+	if state.agencyName ~= "" then
+		local step = state.tutorialStep or 0
+		if Tutorial.isActiveStep(step) then
+			if step ~= shownTutorialStep then
+				shownTutorialStep = step
+				local stepDef = Tutorial.STEPS[step]
+				tutorialOverlay.show(step, Tutorial.TOTAL_STEPS, stepDef.title, stepDef.body)
+			end
+		elseif shownTutorialStep ~= nil then
+			-- Step is past TOTAL_STEPS (or DONE) — hide and stop tracking.
+			shownTutorialStep = nil
+			tutorialOverlay.hide()
 		end
 	end
 
