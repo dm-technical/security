@@ -17,6 +17,7 @@ local TechTreePanel = require(script.Parent.TechTreePanel)
 local TechNodeCard = require(script.Parent.TechNodeCard)
 local PrestigePanel = require(script.Parent.PrestigePanel)
 local ShopPanel = require(script.Parent.ShopPanel)
+local AchievementsPanel = require(script.Parent.AchievementsPanel)
 local LeftSidebar = require(script.Parent.LeftSidebar)
 local RightPanel = require(script.Parent.RightPanel)
 local ContractsBar = require(script.Parent.ContractsBar)
@@ -48,6 +49,7 @@ export type Handles = {
 	techNodes: { [string]: TechNodeCard.Handle },
 	prestigePanel: PrestigePanel.Handle,
 	shopPanel: ShopPanel.Handle,
+	achievementsPanel: AchievementsPanel.Handle,
 	businessesScroll: ScrollingFrame,
 	techTreeFrame: Frame,
 	-- Switches which center panel is visible.
@@ -416,11 +418,23 @@ function UI.build(): Handles
 	shopContainer.Parent = root
 	local shopPanel = ShopPanel.build(shopContainer)
 
+	-- Achievements (Mission Log) container.
+	local achievementsContainer = Instance.new("Frame")
+	achievementsContainer.Name = "AchievementsContainer"
+	achievementsContainer.Position = centerScroll.Position
+	achievementsContainer.Size = centerScroll.Size
+	achievementsContainer.BackgroundTransparency = 1
+	achievementsContainer.Visible = false
+	achievementsContainer.ZIndex = 3
+	achievementsContainer.Parent = root
+	local achievementsPanel = AchievementsPanel.build(achievementsContainer)
+
 	local function showTab(id: string)
 		centerScroll.Visible = (id == "businesses")
 		techTreeFrame.Visible = (id == "upgrades")
 		prestigeContainer.Visible = (id == "prestige")
 		shopContainer.Visible = (id == "shop")
+		achievementsContainer.Visible = (id == "achievements")
 	end
 
 	-- Bottom strip: 3 procedural mission contracts. Replaces the previously
@@ -525,6 +539,7 @@ function UI.build(): Handles
 		techNodes = techTree.nodes,
 		prestigePanel = prestigePanel,
 		shopPanel = shopPanel,
+		achievementsPanel = achievementsPanel,
 		businessesScroll = centerScroll,
 		techTreeFrame = techTreeFrame,
 		showTab = showTab,

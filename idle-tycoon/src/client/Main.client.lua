@@ -237,7 +237,9 @@ handles.rightPanel.onBoostClick = function(id: string)
 	Sounds.play("milestone")
 end
 handles.rightPanel.onViewAllClick = function()
-	comingSoon("Achievements")
+	handles.sidebar.setActiveTab("achievements")
+	handles.showTab("achievements")
+	Sounds.play("uiClick")
 end
 -- "+" next to the science counter opens the Shop tab — the natural place
 -- to actually spend science.
@@ -982,6 +984,45 @@ local function refreshUI()
 			h.setState("available", cost, statusText)
 		end
 	end
+
+	-- Achievements (Mission Log): update each row's progress + status, and
+	-- reorder so unlocked items sink to the bottom UNLOCKED section while
+	-- in-progress items sit under the IN PROGRESS header.
+	-- LayoutOrder convention: header IN PROGRESS = 1, in-progress rows 2..n,
+	-- header UNLOCKED = 1000, unlocked rows 1001..n.
+	local achievementMetrics = {
+		totalEarned = state.totalEarned or 0,
+		gems = state.gems or 0,
+		totalClicks = state.totalClicks or 0,
+	}
+	-- totalOwned isn't on `state` directly; derive from businesses.
+	local totalOwned = 0
+	for _, b in pairs(state.businesses) do
+		totalOwned += (b.owned or 0)
+	end
+	achievementMetrics.totalOwned = totalOwned
+
+	local inProgressOrder = 2
+	local unlockedOrder = 1001
+	for id, h in pairs(handles.achievementsPanel.items) do
+		local def = h.def
+		local current = Achievements.current(def, achievementMetrics)
+		local progress = Achievements.progress(def, achievementMetrics)
+		local achState = state.achievements[id]
+		if achState and achState.unlocked then
+			h.setState("unlocked", current, 1, achState.unlockedAt or 0)
+			h.frame.LayoutOrder = unlockedOrder
+			unlockedOrder += 1
+		else
+			h.setState("progress", current, progress, 0)
+			h.frame.LayoutOrder = inProgressOrder
+			inProgressOrder += 1
+		end
+	end
+	-- Hide the UNLOCKED section header if nothing is unlocked yet — keeps
+	-- the panel from looking empty-but-decorated for new players.
+	handles.achievementsPanel.unlockedHeader.Visible = (unlockedOrder > 1001)
+	handles.achievementsPanel.inProgressHeader.Visible = (inProgressOrder > 2)
 end
 
 local lastFrame = os.clock()
