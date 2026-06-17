@@ -170,6 +170,33 @@ def run_tool(name: str, tool_input: dict, state: dict):
     return {"error": f"Unknown tool: {name}"}, None
 
 
+# Output-only fields that appear on response content blocks but are rejected
+# by the API when those blocks are replayed in a subsequent request.
+_OUTPUT_ONLY_KEYS = {"parsed_output"}
+
+
+def _clean_block(block: dict) -> dict:
+    """Strip output-only and null fields so a block can be sent back to the API."""
+    return {
+        k: v
+        for k, v in block.items()
+        if k not in _OUTPUT_ONLY_KEYS and v is not None
+    }
+
+
+def _sanitize_messages(messages: list) -> None:
+    """Defensively clean any assistant content blocks already in the history.
+
+    Protects against replaying a campaign saved by an older, buggy version.
+    """
+    for msg in messages:
+        content = msg.get("content")
+        if isinstance(content, list):
+            msg["content"] = [
+                _clean_block(b) if isinstance(b, dict) else b for b in content
+            ]
+
+
 def stream_dm_turn(client: anthropic.Anthropic, state: dict):
     """Run one DM turn, looping over tool calls, yielding UI events.
 
@@ -178,6 +205,7 @@ def stream_dm_turn(client: anthropic.Anthropic, state: dict):
     `state` holds {"messages": [...], "sheet": {...}} and is mutated in place.
     """
     messages = state["messages"]
+    _sanitize_messages(messages)
 
     while True:
         try:
@@ -199,7 +227,7 @@ def stream_dm_turn(client: anthropic.Anthropic, state: dict):
         # Record the assistant turn verbatim (preserves thinking + tool_use
         # blocks). Store as plain dicts so the whole campaign stays
         # JSON-serializable for saving; the API accepts dicts on replay.
-        assistant_content = [block.model_dump() for block in final.content]
+        assistant_content = [_clean_block(block.model_dump()) for block in final.content]
         messages.append({"role": "assistant", "content": assistant_content})
 
         if final.stop_reason != "tool_use":
