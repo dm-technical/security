@@ -1,9 +1,11 @@
 --!strict
--- Settings panel: floating gear button + slide-out modal with toggles.
--- Stores nothing locally; emits an `onChange` callback the controller wires
--- to the server's UpdateSettings remote and to the Sounds/Music modules.
+-- Settings panel: floating gear button + slide-out modal with volume
+-- sliders for SFX + Music. Stores nothing locally; emits an `onChange`
+-- callback the controller wires to the server's UpdateSettings remote
+-- and to the Sounds/Music modules for immediate audio feedback.
 
 local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
 
 local Theme = require(script.Parent.Theme)
 
@@ -11,20 +13,38 @@ local Settings = {}
 
 export type Values = { sfxVolume: number, musicVolume: number }
 
+export type SliderHandle = {
+	row: Frame,
+	track: TextButton, -- doubles as input surface for drag
+	fill: Frame,
+	knob: Frame,
+	percentLabel: TextLabel,
+	setValue: (v: number) -> (),
+}
+
 export type Handle = {
 	gearButton: TextButton,
 	panel: Frame,
-	sfxButton: TextButton,
-	musicButton: TextButton,
+	sfxSlider: SliderHandle,
+	musicSlider: SliderHandle,
 	closeButton: TextButton,
 	values: Values,
 	setValues: (values: Values) -> (),
+	-- Fires continuously as the player drags a slider. Use this for immediate
+	-- local audio feedback (Sounds.setVolume / Music.setVolume).
 	onChange: ((Values) -> ())?,
+	-- Fires once when the drag ends (mouse-up / touch-end). Use this to
+	-- persist to the server — avoids spamming the UpdateSettings remote.
+	onCommit: ((Values) -> ())?,
 }
 
-local function makeToggle(parent: Instance, layoutOrder: number, label: string, icon: string): (Frame, TextButton)
+local TRACK_HEIGHT = 12
+local KNOB_SIZE = 22
+
+-- Build one slider row: icon (left), label + percent (top), track (below).
+local function makeSlider(parent: Instance, layoutOrder: number, label: string, icon: string): SliderHandle
 	local row = Instance.new("Frame")
-	row.Size = UDim2.new(1, 0, 0, 56)
+	row.Size = UDim2.new(1, 0, 0, 72)
 	row.BackgroundColor3 = Theme.colors.panelAlt
 	row.BorderSizePixel = 0
 	row.LayoutOrder = layoutOrder
@@ -33,48 +53,128 @@ local function makeToggle(parent: Instance, layoutOrder: number, label: string, 
 	Theme.padding(row, 12)
 
 	local iconLabel = Instance.new("TextLabel")
-	iconLabel.Size = UDim2.fromOffset(36, 36)
-	iconLabel.Position = UDim2.fromOffset(0, 8)
+	iconLabel.Size = UDim2.fromOffset(30, 30)
+	iconLabel.Position = UDim2.fromOffset(0, 0)
 	iconLabel.BackgroundTransparency = 1
 	iconLabel.Text = icon
 	iconLabel.Font = Theme.font.heading
-	iconLabel.TextSize = 24
+	iconLabel.TextSize = 22
 	iconLabel.Parent = row
 
 	local nameLabel = Instance.new("TextLabel")
-	nameLabel.Size = UDim2.new(1, -130, 1, 0)
-	nameLabel.Position = UDim2.fromOffset(44, 0)
+	nameLabel.Size = UDim2.new(1, -100, 0, 26)
+	nameLabel.Position = UDim2.fromOffset(38, 0)
 	nameLabel.BackgroundTransparency = 1
 	nameLabel.Text = label
 	nameLabel.TextColor3 = Theme.colors.text
 	nameLabel.Font = Theme.font.heading
-	nameLabel.TextSize = 18
+	nameLabel.TextSize = 16
 	nameLabel.TextXAlignment = Enum.TextXAlignment.Left
 	nameLabel.Parent = row
 
-	local toggle = Instance.new("TextButton")
-	toggle.Size = UDim2.new(0, 80, 0, 36)
-	toggle.Position = UDim2.new(1, -80, 0.5, -18)
-	toggle.AutoButtonColor = false
-	toggle.BackgroundColor3 = Theme.colors.buyAction
-	toggle.Text = "ON"
-	toggle.TextColor3 = Theme.colors.text
-	toggle.Font = Theme.font.heading
-	toggle.TextSize = 16
-	toggle.Parent = row
-	Theme.corner(toggle, 8)
+	local percentLabel = Instance.new("TextLabel")
+	percentLabel.AnchorPoint = Vector2.new(1, 0)
+	percentLabel.Position = UDim2.new(1, 0, 0, 0)
+	percentLabel.Size = UDim2.fromOffset(60, 26)
+	percentLabel.BackgroundTransparency = 1
+	percentLabel.Text = "0%"
+	percentLabel.TextColor3 = Theme.colors.muted
+	percentLabel.Font = Theme.font.display
+	percentLabel.TextSize = 14
+	percentLabel.TextXAlignment = Enum.TextXAlignment.Right
+	percentLabel.Parent = row
 
-	return row, toggle
+	-- Track sits below the header row. TextButton so we get InputBegan
+	-- for drag; no visible text.
+	local track = Instance.new("TextButton")
+	track.AnchorPoint = Vector2.new(0, 1)
+	track.Position = UDim2.new(0, 0, 1, 0)
+	track.Size = UDim2.new(1, 0, 0, TRACK_HEIGHT)
+	track.BackgroundColor3 = Color3.fromRGB(20, 24, 44)
+	track.AutoButtonColor = false
+	track.Text = ""
+	track.Parent = row
+	Theme.corner(track, 6)
+
+	local fill = Instance.new("Frame")
+	fill.Size = UDim2.fromScale(0, 1)
+	fill.BackgroundColor3 = Theme.colors.buyAction
+	fill.BorderSizePixel = 0
+	fill.Parent = track
+	Theme.corner(fill, 6)
+
+	local knob = Instance.new("Frame")
+	knob.AnchorPoint = Vector2.new(0.5, 0.5)
+	knob.Position = UDim2.fromScale(0, 0.5)
+	knob.Size = UDim2.fromOffset(KNOB_SIZE, KNOB_SIZE)
+	knob.BackgroundColor3 = Theme.colors.buyBright
+	knob.BorderSizePixel = 0
+	knob.ZIndex = 2
+	knob.Parent = track
+	Theme.corner(knob, KNOB_SIZE)
+	Theme.stroke(knob, Theme.colors.panel, 2, 0)
+
+	local handle: SliderHandle = {
+		row = row,
+		track = track,
+		fill = fill,
+		knob = knob,
+		percentLabel = percentLabel,
+		setValue = function(_) end,
+	}
+
+	handle.setValue = function(v: number)
+		v = math.clamp(v, 0, 1)
+		fill.Size = UDim2.fromScale(v, 1)
+		knob.Position = UDim2.fromScale(v, 0.5)
+		percentLabel.Text = string.format("%d%%", math.floor(v * 100 + 0.5))
+	end
+
+	return handle
 end
 
-local function styleToggle(button: TextButton, isOn: boolean)
-	if isOn then
-		button.BackgroundColor3 = Theme.colors.buyAction
-		button.Text = "ON"
-	else
-		button.BackgroundColor3 = Theme.colors.dim
-		button.Text = "OFF"
+-- Wire mouse/touch drag on a slider. onDrag(fraction) is called continuously
+-- while dragging; onCommit(fraction) fires once when the drag ends so we can
+-- persist to the server without spamming remotes during the drag itself.
+local function bindDrag(slider: SliderHandle, onDrag: (number) -> (), onCommit: (number) -> ())
+	local dragging = false
+
+	local function updateFromInput(input: InputObject)
+		local trackPos = slider.track.AbsolutePosition
+		local trackSize = slider.track.AbsoluteSize
+		local relativeX = input.Position.X - trackPos.X
+		local fraction = if trackSize.X > 0 then math.clamp(relativeX / trackSize.X, 0, 1) else 0
+		onDrag(fraction)
 	end
+
+	slider.track.InputBegan:Connect(function(input: InputObject)
+		if input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = true
+			updateFromInput(input)
+		end
+	end)
+
+	UserInputService.InputChanged:Connect(function(input: InputObject)
+		if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
+			or input.UserInputType == Enum.UserInputType.Touch) then
+			updateFromInput(input)
+		end
+	end)
+
+	UserInputService.InputEnded:Connect(function(input: InputObject)
+		if not dragging then return end
+		if input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = false
+			-- Compute the final value from the current slider position (we've
+			-- already been mirroring the drag into the fill), then commit.
+			local trackSize = slider.track.AbsoluteSize
+			local fillSize = slider.fill.AbsoluteSize
+			local fraction = if trackSize.X > 0 then fillSize.X / trackSize.X else 0
+			onCommit(math.clamp(fraction, 0, 1))
+		end
+	end)
 end
 
 function Settings.build(parent: ScreenGui): Handle
@@ -94,12 +194,12 @@ function Settings.build(parent: ScreenGui): Handle
 	Theme.corner(gearButton, 12)
 	Theme.stroke(gearButton, Theme.colors.panelHi, 2, 0)
 
-	-- Modal panel.
+	-- Modal panel. Taller than before to fit the slider rows.
 	local panel = Instance.new("Frame")
 	panel.Name = "SettingsPanel"
 	panel.AnchorPoint = Vector2.new(0.5, 0.5)
 	panel.Position = UDim2.fromScale(0.5, 0.5)
-	panel.Size = UDim2.new(0, 380, 0, 280)
+	panel.Size = UDim2.new(0, 400, 0, 320)
 	panel.BackgroundColor3 = Theme.colors.panel
 	panel.BorderSizePixel = 0
 	panel.Visible = false
@@ -131,8 +231,11 @@ function Settings.build(parent: ScreenGui): Handle
 	listLayout.SortOrder = Enum.SortOrder.LayoutOrder
 	listLayout.Parent = list
 
-	local _, sfxButton = makeToggle(list, 1, "Sound effects", "🔊")
-	local _, musicButton = makeToggle(list, 2, "Background music", "🎵")
+	local sfxSlider = makeSlider(list, 1, "Sound effects", "🔊")
+	local musicSlider = makeSlider(list, 2, "Background music", "🎵")
+
+	-- Bump ZIndex on every slider descendant so they render above the panel
+	-- background (the panel Frame is at ZIndex 90; children default to 91).
 	for _, child in ipairs(list:GetChildren()) do
 		if child:IsA("Frame") then
 			child.ZIndex = 91
@@ -158,26 +261,51 @@ function Settings.build(parent: ScreenGui): Handle
 	local handle: Handle = {
 		gearButton = gearButton,
 		panel = panel,
-		sfxButton = sfxButton,
-		musicButton = musicButton,
+		sfxSlider = sfxSlider,
+		musicSlider = musicSlider,
 		closeButton = closeButton,
 		values = { sfxVolume = 1.0, musicVolume = 0.6 },
 		setValues = function(_) end, -- placeholder, replaced below
 		onChange = nil,
+		onCommit = nil,
 	}
-
-	local function fire()
-		styleToggle(handle.sfxButton, handle.values.sfxVolume > 0)
-		styleToggle(handle.musicButton, handle.values.musicVolume > 0)
-		if handle.onChange then handle.onChange(handle.values) end
-	end
 
 	handle.setValues = function(v: Values)
 		handle.values.sfxVolume = math.clamp(v.sfxVolume or 1, 0, 1)
 		handle.values.musicVolume = math.clamp(v.musicVolume or 0.6, 0, 1)
-		styleToggle(handle.sfxButton, handle.values.sfxVolume > 0)
-		styleToggle(handle.musicButton, handle.values.musicVolume > 0)
+		sfxSlider.setValue(handle.values.sfxVolume)
+		musicSlider.setValue(handle.values.musicVolume)
 	end
+	handle.setValues(handle.values)
+
+	-- Drag handlers.
+	-- During drag (onDrag): update visual + fire handle.onChange every frame
+	-- so the controller can update local audio volume immediately.
+	-- On drag end (onCommit): fire handle.onCommit exactly once so the
+	-- controller can persist the final value to the server without spamming
+	-- the UpdateSettings remote during the drag itself.
+	bindDrag(sfxSlider,
+		function(v: number)
+			handle.values.sfxVolume = v
+			sfxSlider.setValue(v)
+			if handle.onChange then handle.onChange(handle.values) end
+		end,
+		function(v: number)
+			handle.values.sfxVolume = v
+			if handle.onCommit then handle.onCommit(handle.values) end
+		end
+	)
+	bindDrag(musicSlider,
+		function(v: number)
+			handle.values.musicVolume = v
+			musicSlider.setValue(v)
+			if handle.onChange then handle.onChange(handle.values) end
+		end,
+		function(v: number)
+			handle.values.musicVolume = v
+			if handle.onCommit then handle.onCommit(handle.values) end
+		end
+	)
 
 	-- Local interactions.
 	local function showPanel()
@@ -185,7 +313,7 @@ function Settings.build(parent: ScreenGui): Handle
 		panel.Size = UDim2.new(0, 0, 0, 0)
 		TweenService:Create(panel, TweenInfo.new(
 			0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out
-		), { Size = UDim2.new(0, 380, 0, 280) }):Play()
+		), { Size = UDim2.new(0, 400, 0, 320) }):Play()
 	end
 
 	local function hidePanel()
@@ -202,15 +330,6 @@ function Settings.build(parent: ScreenGui): Handle
 		if panel.Visible then hidePanel() else showPanel() end
 	end)
 	closeButton.MouseButton1Click:Connect(hidePanel)
-
-	sfxButton.MouseButton1Click:Connect(function()
-		handle.values.sfxVolume = handle.values.sfxVolume > 0 and 0 or 1.0
-		fire()
-	end)
-	musicButton.MouseButton1Click:Connect(function()
-		handle.values.musicVolume = handle.values.musicVolume > 0 and 0 or 0.6
-		fire()
-	end)
 
 	return handle
 end

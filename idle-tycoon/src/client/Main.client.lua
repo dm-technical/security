@@ -308,20 +308,21 @@ task.spawn(function()
 	end
 end)
 
--- Settings -> apply locally + persist to server.
-local function applySettings(values: Settings.Values)
+-- Settings -> apply locally on every drag frame for instant audio feedback,
+-- but only persist to the server on drag end. Otherwise a single 3-second
+-- drag from 0% → 100% would fire UpdateSettings 100+ times.
+settingsPanel.onChange = function(values: Settings.Values)
 	Sounds.setVolume(values.sfxVolume)
 	Music.setVolume(values.musicVolume)
+end
+settingsPanel.onCommit = function(values: Settings.Values)
 	settingsEvent:FireServer(values)
 end
-settingsPanel.onChange = applySettings
 
 -- Bind tactile feedback on every button at construction time.
 Effects.bindPressFeel(handles.qtyButton)
 Effects.bindPressFeel(handles.offlineCloseButton)
 Effects.bindPressFeel(settingsPanel.gearButton)
-Effects.bindPressFeel(settingsPanel.sfxButton)
-Effects.bindPressFeel(settingsPanel.musicButton)
 Effects.bindPressFeel(settingsPanel.closeButton)
 for _, h in pairs(handles.businesses) do
 	Effects.bindPressFeel(h.buyButton)
